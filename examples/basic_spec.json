@@ -1,0 +1,98 @@
+{
+  "version": "1.0.0",
+  "metadata": {
+    "name": "Memory System Verification",
+    "description": "AVIR specification for verifying AI memory system performance",
+    "author": "2 Acre Studios",
+    "created": "2025-01-01T00:00:00Z",
+    "tags": ["memory", "ai", "performance"]
+  },
+  "system": {
+    "name": "enhanced-memory-mcp",
+    "version": "1.0.0",
+    "description": "4-tier AI memory system with RAG capabilities",
+    "repository": "https://github.com/marcshade/enhanced-memory-mcp"
+  },
+  "benchmarks": [
+    {
+      "id": "memory_entity_creation",
+      "name": "Entity Creation Throughput",
+      "description": "Rate of creating new memory entities",
+      "category": "performance",
+      "target": 435,
+      "unit": "ops/s",
+      "tolerance": 0.20,
+      "iterations": 5
+    },
+    {
+      "id": "semantic_search",
+      "name": "Semantic Search Performance",
+      "description": "Vector similarity search operations per second",
+      "category": "performance",
+      "target": 81,
+      "unit": "ops/s",
+      "tolerance": 0.20,
+      "iterations": 5
+    },
+    {
+      "id": "memory_promotion",
+      "name": "Memory Promotion Rate",
+      "description": "Rate of promoting memories between tiers",
+      "category": "performance",
+      "target": 6.4,
+      "unit": "ops/s",
+      "tolerance": 0.20,
+      "iterations": 5
+    },
+    {
+      "id": "task_decomposition",
+      "name": "Task Decomposition Latency",
+      "description": "Time to decompose a complex task into subtasks",
+      "category": "performance",
+      "target": 1200,
+      "unit": "ms",
+      "tolerance": 0.25,
+      "lower_is_better": true,
+      "iterations": 5
+    },
+    {
+      "id": "baton_handoff",
+      "name": "Baton Handoff Latency",
+      "description": "Time to transfer context between agents",
+      "category": "performance",
+      "target": 89,
+      "unit": "ms",
+      "tolerance": 0.50,
+      "lower_is_better": true,
+      "iterations": 5
+    }
+  ],
+  "capabilities": [
+    {
+      "name": "vector_search",
+      "description": "Semantic vector similarity search",
+      "required": true
+    },
+    {
+      "name": "memory_tiers",
+      "description": "4-tier memory architecture (working, episodic, semantic, procedural)",
+      "required": true
+    },
+    {
+      "name": "compression",
+      "description": "Memory compression capabilities",
+      "required": false
+    }
+  ],
+  "requirements": {
+    "min_iterations": 3,
+    "pass_threshold": 0.8,
+    "outlier_removal": true,
+    "min_providers": 2
+  },
+  "cross_verification": {
+    "enabled": true,
+    "blinding_mode": "double_blind",
+    "exclude_self_verification": true
+  }
+}

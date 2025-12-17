@@ -1,0 +1,278 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://avir-protocol.org/schemas/specification.schema.json",
+  "title": "AVIR Specification",
+  "description": "Schema for AVIR verification specification documents",
+  "type": "object",
+  "required": ["version", "metadata", "system", "benchmarks"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Specification version (semver)",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Specification metadata",
+      "required": ["name"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human-readable name"
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description"
+        },
+        "author": {
+          "type": "string",
+          "description": "Author or organization"
+        },
+        "created": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Creation timestamp"
+        },
+        "tags": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Categorization tags"
+        },
+        "license": {
+          "type": "string",
+          "description": "License identifier"
+        }
+      }
+    },
+    "system": {
+      "type": "object",
+      "description": "System under verification",
+      "required": ["name", "version"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "System name"
+        },
+        "version": {
+          "type": "string",
+          "description": "System version"
+        },
+        "description": {
+          "type": "string"
+        },
+        "repository": {
+          "type": "string",
+          "format": "uri",
+          "description": "Source repository URL"
+        },
+        "documentation": {
+          "type": "string",
+          "format": "uri",
+          "description": "Documentation URL"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "System dependencies"
+        }
+      }
+    },
+    "benchmarks": {
+      "type": "array",
+      "description": "Benchmark definitions",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "target", "tolerance"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique benchmark identifier",
+            "pattern": "^[a-z][a-z0-9_]*$"
+          },
+          "name": {
+            "type": "string",
+            "description": "Human-readable name"
+          },
+          "description": {
+            "type": "string",
+            "description": "What this benchmark measures"
+          },
+          "category": {
+            "type": "string",
+            "enum": ["performance", "correctness", "resource", "reliability", "security"],
+            "description": "Benchmark category"
+          },
+          "target": {
+            "type": "number",
+            "description": "Target value to achieve"
+          },
+          "unit": {
+            "type": "string",
+            "description": "Unit of measurement (e.g., 'ops/s', 'ms', 'MB')"
+          },
+          "tolerance": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1,
+            "description": "Acceptable deviation from target (0.0-1.0)"
+          },
+          "lower_is_better": {
+            "type": "boolean",
+            "default": false,
+            "description": "True for metrics like latency where lower is better"
+          },
+          "iterations": {
+            "type": "integer",
+            "minimum": 1,
+            "default": 5,
+            "description": "Number of benchmark iterations"
+          },
+          "warmup": {
+            "type": "integer",
+            "minimum": 0,
+            "default": 0,
+            "description": "Warmup iterations (excluded from results)"
+          },
+          "outlier_policy": {
+            "type": "string",
+            "enum": ["none", "iqr", "zscore"],
+            "default": "iqr",
+            "description": "Outlier removal policy"
+          },
+          "timeout": {
+            "type": "integer",
+            "description": "Timeout in seconds"
+          }
+        }
+      }
+    },
+    "capabilities": {
+      "type": "array",
+      "description": "System capabilities to verify",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Capability identifier"
+          },
+          "description": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean",
+            "default": true,
+            "description": "Whether this capability is required"
+          },
+          "verification_method": {
+            "type": "string",
+            "description": "How to verify this capability"
+          }
+        }
+      }
+    },
+    "requirements": {
+      "type": "object",
+      "description": "Verification requirements",
+      "properties": {
+        "min_iterations": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 3,
+          "description": "Minimum iterations for statistical validity"
+        },
+        "pass_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.8,
+          "description": "Minimum pass rate for VERIFIED verdict"
+        },
+        "outlier_removal": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable outlier removal"
+        },
+        "statistical_significance": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.95,
+          "description": "Required statistical significance"
+        },
+        "min_providers": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 2,
+          "description": "Minimum providers for cross-verification"
+        },
+        "consensus_threshold": {
+          "type": "number",
+          "minimum": 0.5,
+          "maximum": 1,
+          "default": 0.67,
+          "description": "Required consensus for cross-verification"
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "description": "Environment requirements",
+      "properties": {
+        "container": {
+          "type": "boolean",
+          "default": false,
+          "description": "Run in container isolation"
+        },
+        "isolation_level": {
+          "type": "string",
+          "enum": ["none", "process", "container", "tee"],
+          "default": "process",
+          "description": "Context isolation level"
+        },
+        "timeout": {
+          "type": "integer",
+          "default": 300,
+          "description": "Overall timeout in seconds"
+        },
+        "resources": {
+          "type": "object",
+          "properties": {
+            "cpu_limit": {"type": "string"},
+            "memory_limit": {"type": "string"},
+            "disk_limit": {"type": "string"}
+          }
+        }
+      }
+    },
+    "cross_verification": {
+      "type": "object",
+      "description": "Cross-provider verification settings",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable cross-provider verification"
+        },
+        "blinding_mode": {
+          "type": "string",
+          "enum": ["none", "single_blind", "double_blind"],
+          "default": "double_blind",
+          "description": "Blinding mode for verification"
+        },
+        "required_providers": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Specific providers required"
+        },
+        "exclude_self_verification": {
+          "type": "boolean",
+          "default": true,
+          "description": "Exclude self-verification from consensus"
+        }
+      }
+    }
+  }
+}

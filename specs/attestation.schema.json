@@ -1,0 +1,253 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://avir-protocol.org/schemas/attestation.schema.json",
+  "title": "AVIR Attestation",
+  "description": "Schema for AVIR verification attestation documents",
+  "type": "object",
+  "required": ["version", "timestamp", "specification_hash", "verdict", "chain", "results"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "AVIR protocol version",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Attestation creation timestamp"
+    },
+    "specification_hash": {
+      "type": "string",
+      "description": "SHA-256 hash of the specification",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["VERIFIED", "PARTIAL", "FAILED", "INVALID", "INCONCLUSIVE"],
+      "description": "Overall verification verdict"
+    },
+    "verification_level": {
+      "type": "string",
+      "enum": ["L1", "L2", "L3", "L4"],
+      "description": "Verification depth level"
+    },
+    "provider": {
+      "type": "object",
+      "description": "Provider that performed verification",
+      "required": ["provider_id"],
+      "properties": {
+        "provider_id": {
+          "type": "string",
+          "description": "Provider identifier (e.g., 'claude', 'openai', 'gemini')"
+        },
+        "model": {
+          "type": "string",
+          "description": "Specific model used"
+        },
+        "version": {
+          "type": "string",
+          "description": "Provider SDK/API version"
+        }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "description": "Execution environment details",
+      "properties": {
+        "platform": {
+          "type": "string",
+          "description": "Operating system"
+        },
+        "architecture": {
+          "type": "string",
+          "description": "CPU architecture"
+        },
+        "python_version": {
+          "type": "string"
+        },
+        "container": {
+          "type": "boolean",
+          "description": "Running in container"
+        },
+        "isolation_level": {
+          "type": "string",
+          "enum": ["none", "process", "container", "tee"]
+        }
+      }
+    },
+    "chain": {
+      "type": "object",
+      "description": "Attestation hash chain",
+      "required": ["chain_hash", "entries"],
+      "properties": {
+        "chain_hash": {
+          "type": "string",
+          "description": "Final chain hash",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "entries": {
+          "type": "array",
+          "description": "Chain entries",
+          "items": {
+            "type": "object",
+            "required": ["sequence", "hash", "timestamp"],
+            "properties": {
+              "sequence": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "hash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "timestamp": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "event_type": {
+                "type": "string"
+              },
+              "data_hash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          }
+        }
+      }
+    },
+    "results": {
+      "type": "array",
+      "description": "Individual benchmark results",
+      "items": {
+        "type": "object",
+        "required": ["benchmark_id", "verdict"],
+        "properties": {
+          "benchmark_id": {
+            "type": "string"
+          },
+          "verdict": {
+            "type": "string",
+            "enum": ["PASS", "FAIL", "SKIP", "ERROR"]
+          },
+          "target": {
+            "type": "number"
+          },
+          "measured": {
+            "type": "number"
+          },
+          "deviation": {
+            "type": "number",
+            "description": "Percentage deviation from target"
+          },
+          "statistics": {
+            "type": "object",
+            "properties": {
+              "mean": {"type": "number"},
+              "std_dev": {"type": "number"},
+              "min": {"type": "number"},
+              "max": {"type": "number"},
+              "median": {"type": "number"},
+              "p95": {"type": "number"},
+              "p99": {"type": "number"},
+              "sample_count": {"type": "integer"}
+            }
+          },
+          "iterations": {
+            "type": "integer"
+          },
+          "execution_time_ms": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "cross_verification": {
+      "type": "object",
+      "description": "Cross-provider verification matrix (if applicable)",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "blinding_mode": {
+          "type": "string",
+          "enum": ["none", "single_blind", "double_blind"]
+        },
+        "providers": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "consensus_verdict": {
+          "type": "string",
+          "enum": ["VERIFIED", "PARTIAL", "FAILED", "INVALID", "INCONCLUSIVE"]
+        },
+        "consensus_pass_rate": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "agreement_score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Inter-rater agreement (1.0 = unanimous)"
+        },
+        "matrix": {
+          "type": "array",
+          "description": "Verification matrix cells",
+          "items": {
+            "type": "object",
+            "properties": {
+              "verifier": {"type": "string"},
+              "subject": {"type": "string"},
+              "verdict": {"type": "string"},
+              "pass_rate": {"type": "number"},
+              "is_cross_verification": {"type": "boolean"}
+            }
+          }
+        }
+      }
+    },
+    "signature": {
+      "type": "object",
+      "description": "Digital signature (optional)",
+      "properties": {
+        "algorithm": {
+          "type": "string",
+          "enum": ["Ed25519", "RSA-SHA256"],
+          "default": "Ed25519"
+        },
+        "signer_id": {
+          "type": "string",
+          "description": "Signer identifier"
+        },
+        "signature": {
+          "type": "string",
+          "description": "Base64-encoded signature"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional metadata",
+      "properties": {
+        "tags": {
+          "type": "array",
+          "items": {"type": "string"}
+        },
+        "notes": {
+          "type": "string"
+        },
+        "related_attestations": {
+          "type": "array",
+          "items": {"type": "string"},
+          "description": "Hashes of related attestations"
+        }
+      }
+    }
+  }
+}

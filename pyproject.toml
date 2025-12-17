@@ -1,0 +1,137 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "avir-protocol"
+version = "1.0.0"
+description = "AI-Verified Independent Replication Protocol - Cross-provider AI verification"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.9"
+authors = [
+    {name = "Marc Shade", email = "marc@2acrestudios.com"}
+]
+maintainers = [
+    {name = "2 Acre Studios"}
+]
+keywords = [
+    "ai",
+    "verification",
+    "benchmarking",
+    "attestation",
+    "reproducibility",
+    "cross-verification",
+    "double-blind",
+    "llm",
+    "claude",
+    "openai",
+    "gemini",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Testing",
+]
+
+dependencies = [
+    "pydantic>=2.0",
+    "jsonschema>=4.0",
+]
+
+[project.optional-dependencies]
+claude = ["anthropic>=0.20.0"]
+openai = ["openai>=1.0.0"]
+gemini = ["google-generativeai>=0.3.0"]
+all-providers = [
+    "anthropic>=0.20.0",
+    "openai>=1.0.0",
+    "google-generativeai>=0.3.0",
+]
+crypto = [
+    "cryptography>=41.0.0",
+    "pynacl>=1.5.0",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "ruff>=0.1.0",
+    "mypy>=1.0",
+]
+full = [
+    "avir-protocol[all-providers,crypto,dev]",
+]
+
+[project.urls]
+Homepage = "https://github.com/marcshade/avir-protocol"
+Documentation = "https://github.com/marcshade/avir-protocol#readme"
+Repository = "https://github.com/marcshade/avir-protocol.git"
+Issues = "https://github.com/marcshade/avir-protocol/issues"
+Changelog = "https://github.com/marcshade/avir-protocol/blob/main/CHANGELOG.md"
+
+[project.scripts]
+avir = "avir.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["avir*"]
+
+[tool.setuptools.package-data]
+avir = ["py.typed"]
+
+[tool.black]
+line-length = 88
+target-version = ["py39", "py310", "py311", "py312"]
+include = '\.pyi?$'
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "UP",  # pyupgrade
+]
+ignore = [
+    "E501",  # line too long (handled by black)
+    "B008",  # do not perform function calls in argument defaults
+]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+exclude = ["tests", "examples"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "-v --cov=avir --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["avir"]
+omit = ["tests/*", "examples/*"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+]
