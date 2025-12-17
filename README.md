@@ -1,6 +1,6 @@
 # AVIR Protocol
 
-<img align="right" width="300" height="300" alt="AVIR" src="https://github.com/user-attachments/assets/036519d8-7e8f-40f7-a51f-ffbe2a3668c0" />
+<img align="right" width="300" height="300" alt="AVIR-protocol" src="https://github.com/user-attachments/assets/b0733676-f36e-4f6d-b2e1-7b5bdb8b6528" />
 
 [![Protocol Version](https://img.shields.io/badge/protocol-v1.0.0-blue)](PROTOCOL.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
