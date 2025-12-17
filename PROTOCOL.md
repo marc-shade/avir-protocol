@@ -77,13 +77,13 @@ This protocol covers:
 │                     AVIR PROTOCOL                           │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
-│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐     │
-│  │ SPEC LAYER  │    │  EXEC LAYER │    │ ATTEST LAYER│     │
-│  ├─────────────┤    ├─────────────┤    ├─────────────┤     │
-│  │ - Schema    │    │ - Container │    │ - Hash Chain│     │
-│  │ - Validator │    │ - Sandbox   │    │ - Signatures│     │
-│  │ - Parser    │    │ - Providers │    │ - Timestamp │     │
-│  └─────────────┘    └─────────────┘    └─────────────┘     │
+│  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐      │
+│  │ SPEC LAYER  │    │  EXEC LAYER │    │ ATTEST LAYER│      │
+│  ├─────────────┤    ├─────────────┤    ├─────────────┤      │
+│  │ - Schema    │    │ - Container │    │ - Hash Chain│      │
+│  │ - Validator │    │ - Sandbox   │    │ - Signatures│      │
+│  │ - Parser    │    │ - Providers │    │ - Timestamp │      │
+│  └─────────────┘    └─────────────┘    └─────────────┘      │
 │         │                  │                  │             │
 │         └──────────────────┼──────────────────┘             │
 │                            │                                │
@@ -299,19 +299,19 @@ Example:
 
 ```
 ┌──────────────────────────────────────────────────────────────┐
-│                   VERIFICATION PROCESS                        │
+│                   VERIFICATION PROCESS                       │
 ├──────────────────────────────────────────────────────────────┤
 │                                                              │
-│  1. VALIDATE      2. PROVISION     3. EXECUTE     4. ATTEST │
-│  ─────────────    ────────────     ─────────      ───────── │
+│  1. VALIDATE      2. PROVISION     3. EXECUTE     4. ATTEST  │
+│  ─────────────    ────────────     ─────────      ─────────  │
 │                                                              │
-│  ┌─────────┐     ┌─────────┐     ┌─────────┐    ┌─────────┐│
-│  │  Parse  │ ──► │ Create  │ ──► │  Run    │ ──►│ Generate││
-│  │  Spec   │     │ Sandbox │     │ Tests   │    │  Proof  ││
-│  └─────────┘     └─────────┘     └─────────┘    └─────────┘│
-│       │               │               │              │      │
-│       ▼               ▼               ▼              ▼      │
-│  [Valid Spec]   [Container]    [Results]     [Attestation] │
+│  ┌─────────┐     ┌─────────┐     ┌─────────┐    ┌─────────┐  │
+│  │  Parse  │ ──► │ Create  │ ──► │  Run    │ ──►│ Generate│  │
+│  │  Spec   │     │ Sandbox │     │ Tests   │    │  Proof  │  │
+│  └─────────┘     └─────────┘     └─────────┘    └─────────┘  │
+│       │               │               │              │       │
+│       ▼               ▼               ▼              ▼       │
+│  [Valid Spec]   [Container]    [Results]     [Attestation]   │
 │                                                              │
 └──────────────────────────────────────────────────────────────┘
 ```
