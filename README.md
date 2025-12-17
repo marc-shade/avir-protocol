@@ -8,7 +8,7 @@
 
 **AI-Verified Independent Replication** - A protocol for AI systems to independently verify each other through double-blind cross-provider verification, eliminating the "AI grading its own test" problem.
 
-## The Problem AVIR Solves
+**The Problem AVIR Solves**
 
 > *An AI verifying its own benchmarks is like a student grading their own test.*
 
