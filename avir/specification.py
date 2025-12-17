@@ -232,10 +232,11 @@ class Specification:
                 errors.append(f"Benchmark '{bench.id}' has invalid tolerance: {bench.tolerance}")
             if bench.runs < 1:
                 errors.append(f"Benchmark '{bench.id}' has invalid runs: {bench.runs}")
-            if bench.category := getattr(bench, 'category', None):
+            category = getattr(bench, 'category', None)
+            if category:
                 valid_categories = {'memory', 'reasoning', 'coordination', 'performance', 'custom'}
-                if bench.category not in valid_categories:
-                    errors.append(f"Benchmark '{bench.id}' has invalid category: {bench.category}")
+                if category not in valid_categories:
+                    errors.append(f"Benchmark '{bench.id}' has invalid category: {category}")
 
         return errors
 

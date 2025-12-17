@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "avir_version": "1.0.0",
   "metadata": {
     "name": "Memory System Verification",
     "description": "AVIR specification for verifying AI memory system performance",
@@ -16,72 +16,70 @@
   "benchmarks": [
     {
       "id": "memory_entity_creation",
-      "name": "Entity Creation Throughput",
       "description": "Rate of creating new memory entities",
-      "category": "performance",
+      "methodology": "measure",
       "target": 435,
       "unit": "ops/s",
       "tolerance": 0.20,
-      "iterations": 5
+      "runs": 5
     },
     {
       "id": "semantic_search",
-      "name": "Semantic Search Performance",
       "description": "Vector similarity search operations per second",
-      "category": "performance",
+      "methodology": "measure",
       "target": 81,
       "unit": "ops/s",
       "tolerance": 0.20,
-      "iterations": 5
+      "runs": 5
     },
     {
       "id": "memory_promotion",
-      "name": "Memory Promotion Rate",
       "description": "Rate of promoting memories between tiers",
-      "category": "performance",
+      "methodology": "measure",
       "target": 6.4,
       "unit": "ops/s",
       "tolerance": 0.20,
-      "iterations": 5
+      "runs": 5
     },
     {
       "id": "task_decomposition",
-      "name": "Task Decomposition Latency",
       "description": "Time to decompose a complex task into subtasks",
-      "category": "performance",
+      "methodology": "measure",
       "target": 1200,
       "unit": "ms",
       "tolerance": 0.25,
       "lower_is_better": true,
-      "iterations": 5
+      "runs": 5
     },
     {
       "id": "baton_handoff",
-      "name": "Baton Handoff Latency",
       "description": "Time to transfer context between agents",
-      "category": "performance",
+      "methodology": "measure",
       "target": 89,
       "unit": "ms",
       "tolerance": 0.50,
       "lower_is_better": true,
-      "iterations": 5
+      "runs": 5
     }
   ],
   "capabilities": [
     {
       "name": "vector_search",
       "description": "Semantic vector similarity search",
-      "required": true
+      "category": "memory",
+      "benchmarks": ["semantic_search"]
     },
     {
       "name": "memory_tiers",
       "description": "4-tier memory architecture (working, episodic, semantic, procedural)",
-      "required": true
+      "category": "memory",
+      "benchmarks": ["memory_entity_creation", "memory_promotion"]
     },
     {
-      "name": "compression",
-      "description": "Memory compression capabilities",
-      "required": false
+      "name": "task_coordination",
+      "description": "Task decomposition and agent coordination",
+      "category": "coordination",
+      "benchmarks": ["task_decomposition", "baton_handoff"]
     }
   ],
   "requirements": {

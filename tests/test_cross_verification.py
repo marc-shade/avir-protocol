@@ -54,11 +54,14 @@ class TestBlindedContext:
     def test_create_blinded_context(self):
         """Test creating a blinded context."""
         spec_data = {
-            "version": "1.0.0",
+            "avir_version": "1.0.0",
             "metadata": {"name": "Test"},
             "system": {"name": "test", "version": "1.0.0"},
+            "capabilities": [
+                {"name": "test_cap", "description": "Test", "category": "performance", "benchmarks": ["test_bm"]}
+            ],
             "benchmarks": [
-                {"id": "test_bm", "target": 100, "tolerance": 0.2}
+                {"id": "test_bm", "description": "Test", "methodology": "test", "target": 100, "unit": "ms", "tolerance": 0.2}
             ],
         }
         spec = Specification.from_dict(spec_data)
@@ -66,7 +69,7 @@ class TestBlindedContext:
         blinded = BlindedContext.create(spec)
 
         assert blinded.context_id is not None
-        assert len(blinded.context_id) == 16
+        assert len(blinded.context_id) == 32  # 16 bytes = 32 hex chars
         assert blinded.specification_hash == spec.hash
         assert len(blinded.benchmark_specs) == 1
         assert blinded.nonce is not None
@@ -74,11 +77,14 @@ class TestBlindedContext:
     def test_benchmark_ids_anonymized(self):
         """Test that benchmark IDs are anonymized."""
         spec_data = {
-            "version": "1.0.0",
+            "avir_version": "1.0.0",
             "metadata": {"name": "Test"},
             "system": {"name": "test", "version": "1.0.0"},
+            "capabilities": [
+                {"name": "test_cap", "description": "Test", "category": "performance", "benchmarks": ["original_id"]}
+            ],
             "benchmarks": [
-                {"id": "original_id", "target": 100, "tolerance": 0.2}
+                {"id": "original_id", "description": "Test", "methodology": "test", "target": 100, "unit": "ms", "tolerance": 0.2}
             ],
         }
         spec = Specification.from_dict(spec_data)
@@ -87,8 +93,8 @@ class TestBlindedContext:
 
         # Original ID should not appear
         assert blinded.benchmark_specs[0]["id"] != "original_id"
-        # Should be a hash
-        assert len(blinded.benchmark_specs[0]["id"]) == 8
+        # Should be a hash (8 bytes = 16 hex chars)
+        assert len(blinded.benchmark_specs[0]["id"]) == 16
 
 
 class TestVerificationCell:
@@ -280,11 +286,14 @@ class TestCrossVerifier:
         )
 
         spec_data = {
-            "version": "1.0.0",
+            "avir_version": "1.0.0",
             "metadata": {"name": "Test"},
             "system": {"name": "test", "version": "1.0.0"},
+            "capabilities": [
+                {"name": "test_cap", "description": "Test", "category": "performance", "benchmarks": ["test"]}
+            ],
             "benchmarks": [
-                {"id": "test", "target": 100, "tolerance": 0.2}
+                {"id": "test", "description": "Test benchmark", "methodology": "test", "target": 100, "unit": "ms", "tolerance": 0.2}
             ],
         }
         spec = Specification.from_dict(spec_data)
@@ -307,11 +316,14 @@ class TestCrossVerifier:
         )
 
         spec_data = {
-            "version": "1.0.0",
+            "avir_version": "1.0.0",
             "metadata": {"name": "Test"},
             "system": {"name": "test", "version": "1.0.0"},
+            "capabilities": [
+                {"name": "test_cap", "description": "Test", "category": "performance", "benchmarks": ["test"]}
+            ],
             "benchmarks": [
-                {"id": "test", "target": 100, "tolerance": 0.2}
+                {"id": "test", "description": "Test benchmark", "methodology": "test", "target": 100, "unit": "ms", "tolerance": 0.2}
             ],
         }
         spec = Specification.from_dict(spec_data)

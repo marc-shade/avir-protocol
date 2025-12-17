@@ -31,9 +31,37 @@ import secrets
 
 from .providers.base import AVIRProvider, VerdictResponse
 from .specification import Specification
-from .benchmark import BenchmarkResult
+from .benchmark import BenchmarkResult, Statistics
 from .verdict import Verdict, VerdictLevel
 from .attestation import Attestation, AttestationChain, VerificationLevel
+
+
+@dataclass
+class CVBenchmarkResult:
+    """Cross-verification benchmark result (internal use)."""
+    benchmark_id: str
+    values: List[float]
+    target: float
+    tolerance: float
+    unit: str
+    lower_is_better: bool = False
+    mean: float = 0.0
+    passed: bool = False
+
+    def calculate_statistics(self) -> None:
+        """Calculate mean from values."""
+        if self.values:
+            self.mean = sum(self.values) / len(self.values)
+
+    def determine_verdict(self) -> None:
+        """Determine pass/fail based on mean vs target."""
+        if self.lower_is_better:
+            max_allowed = self.target * (1 + self.tolerance)
+            self.passed = self.mean <= max_allowed
+        else:
+            min_allowed = self.target * (1 - self.tolerance)
+            max_allowed = self.target * (1 + self.tolerance)
+            self.passed = min_allowed <= self.mean <= max_allowed
 
 
 class BlindingMode(Enum):
@@ -143,7 +171,7 @@ class VerificationCell:
     subject_id: str            # Which provider's output was verified
     verdict: VerdictLevel
     pass_rate: float
-    results: List[BenchmarkResult]
+    results: List[CVBenchmarkResult]
     execution_time: float
     context_hash: str          # Hash of isolated context used
     abstain_count: int = 0     # Number of abstained benchmarks
@@ -164,8 +192,8 @@ class VerificationCell:
 class QuorumConfig:
     """Configuration for quorum requirements."""
     minimum_providers: int = 2       # Minimum providers for valid consensus
-    minimum_agreement: float = 0.67  # Minimum agreement ratio (2/3)
-    maximum_abstain_ratio: float = 0.33  # Max abstains before invalid
+    minimum_agreement: float = 2/3   # Minimum agreement ratio (2/3)
+    maximum_abstain_ratio: float = 1/3  # Max abstains before invalid
     require_cross_org: bool = True   # Require providers from different organizations
 
 
@@ -854,7 +882,7 @@ class CrossVerifier:
                 passed += 1
 
             # Create result (simplified for cross-verification)
-            result = BenchmarkResult(
+            result = CVBenchmarkResult(
                 benchmark_id=bm_spec["id"],
                 values=numeric_outputs,
                 target=target,

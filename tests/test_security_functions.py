@@ -182,12 +182,15 @@ class TestBlindedContext:
     def sample_spec(self):
         """Create sample specification for testing."""
         return Specification.from_dict({
-            "version": "1.0.0",
+            "avir_version": "1.0.0",
             "metadata": {"name": "Test Spec"},
             "system": {"name": "test-system", "version": "1.0.0"},
+            "capabilities": [
+                {"name": "test_cap", "description": "Test capability", "category": "performance", "benchmarks": ["benchmark_one", "benchmark_two"]}
+            ],
             "benchmarks": [
-                {"id": "benchmark_one", "target": 100, "tolerance": 0.2},
-                {"id": "benchmark_two", "target": 50, "tolerance": 0.1},
+                {"id": "benchmark_one", "description": "Test 1", "methodology": "test", "target": 100, "unit": "ms", "tolerance": 0.2},
+                {"id": "benchmark_two", "description": "Test 2", "methodology": "test", "target": 50, "unit": "ms", "tolerance": 0.1},
             ],
         })
 
@@ -202,9 +205,9 @@ class TestBlindedContext:
         for orig_id in original_ids:
             assert orig_id not in blinded_ids
 
-        # Blinded IDs should be 8-character hashes
+        # Blinded IDs should be 16-character hashes (8 bytes = 16 hex chars)
         for bid in blinded_ids:
-            assert len(bid) == 8
+            assert len(bid) == 16
 
     def test_specification_hash_preserved(self, sample_spec):
         """Test that specification hash is preserved for verification."""
@@ -215,7 +218,7 @@ class TestBlindedContext:
         """Test that context ID is generated."""
         blinded = BlindedContext.create(sample_spec)
         assert blinded.context_id is not None
-        assert len(blinded.context_id) == 16
+        assert len(blinded.context_id) == 32  # 16 bytes = 32 hex chars
 
     def test_nonce_generated(self, sample_spec):
         """Test that nonce is generated for uniqueness."""
