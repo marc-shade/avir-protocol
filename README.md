@@ -308,4 +308,5 @@ MIT License - See [LICENSE](LICENSE) for details.
 
 ---
 
-**Part of the [Agentic System]([https://github.com/marcshade/agentic-system-oss](https://github.com/marc-shade/agentic-system-oss)) ecosystem**
+**Part of the Agentic System ecosystem**
+https://github.com/marc-shade/agentic-system-oss
