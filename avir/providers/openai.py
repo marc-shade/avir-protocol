@@ -7,7 +7,7 @@ Updated December 2025 with latest model versions.
 
 import os
 from typing import Any, Dict, List, Optional
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from .base import AVIRProvider, ProviderConfig, VerdictResponse
 
@@ -148,25 +148,65 @@ class OpenAIProvider(AVIRProvider):
         benchmark_spec: Dict[str, Any],
         context: Dict[str, Any],
     ) -> VerdictResponse:
-        """Execute with retry logic for safety refusals."""
-        import random
+        """Numeric benchmark execution.
 
-        # Simulate execution with variance
-        target = benchmark_spec.get('target', 100)
-        tolerance = benchmark_spec.get('tolerance', 0.2)
-
-        # Use seed for reproducibility if set
-        if self._config.seed:
-            random.seed(self._config.seed)
-
-        variance = target * tolerance * random.uniform(-0.3, 0.3)
-        value = target + variance
-
+        An LLM cannot physically MEASURE a numeric performance benchmark, so we
+        abstain rather than fabricate a value. Use rubric benchmarks
+        (``generate_response`` / ``judge_output``) for model-judged verification.
+        """
+        del benchmark_spec, context
         return VerdictResponse(
-            value=value,
-            verdict="PASS" if abs(value - target) <= target * tolerance else "FAIL",
+            value=None,
+            verdict="ABSTAIN",
+            abstain_reason=(
+                "numeric measurement is not an LLM capability; "
+                "use a rubric benchmark for model judgment"
+            ),
             provider_metadata=self._model_version_info,
         )
+
+    async def generate_response(self, prompt: str, *, system: str = "") -> str:
+        """Real subject generation via the OpenAI SDK (requires a key).
+
+        Not exercised in CI; the tested real path is the CLI/cluster providers.
+        """
+        from .cli import _SUBJECT_SYSTEM
+        if not self._client:
+            await self.initialize({})
+        try:
+            resp = self._client.chat.completions.create(
+                model=self._model,
+                temperature=self._config.temperature,
+                max_tokens=self._config.max_tokens,
+                messages=[
+                    {"role": "system", "content": system or _SUBJECT_SYSTEM},
+                    {"role": "user", "content": prompt},
+                ],
+            )
+            return (resp.choices[0].message.content or "").strip()
+        except Exception:  # noqa: BLE001
+            return ""
+
+    async def judge_output(self, *, prompt, response, rubric, expected=""):
+        """Real verifier judgment via the OpenAI SDK (requires a key)."""
+        from .cli import build_judge_prompt, parse_judgment
+        if not self._client:
+            await self.initialize({})
+        judge_prompt = build_judge_prompt(prompt, response, rubric, expected)
+        try:
+            resp = self._client.chat.completions.create(
+                model=self._model,
+                temperature=self._config.temperature,
+                max_tokens=self._config.max_tokens,
+                messages=[{"role": "user", "content": judge_prompt}],
+            )
+            text = resp.choices[0].message.content or ""
+        except Exception as exc:  # noqa: BLE001
+            return VerdictResponse(
+                value=None, verdict="ABSTAIN",
+                abstain_reason=f"openai judge call failed: {exc}",
+            )
+        return parse_judgment(text)
 
     async def analyze_results(
         self,

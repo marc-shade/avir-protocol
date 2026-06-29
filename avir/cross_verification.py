@@ -19,21 +19,17 @@ Updated December 2025 with expert panel recommendations:
 - Quorum and abstain handling
 """
 
-import asyncio
 import hashlib
 import json
-import math
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 import secrets
 
-from .providers.base import AVIRProvider, VerdictResponse
+from .providers.base import AVIRProvider
 from .specification import Specification
-from .benchmark import BenchmarkResult, Statistics
-from .verdict import Verdict, VerdictLevel
-from .attestation import Attestation, AttestationChain, VerificationLevel
+from .verdict import VerdictLevel
 
 
 @dataclass
@@ -72,10 +68,17 @@ class BlindingMode(Enum):
 
 
 class IsolationLevel(Enum):
-    """Context isolation levels."""
+    """Context isolation levels.
+
+    Realized in code (not just labels): CLI providers run each verification in
+    a separate OS PROCESS; HTTP/cluster providers run it on a separate physical
+    node (DISTRIBUTED). Each cell records the verifier's ``execution_locus`` so
+    the attested level is auditable.
+    """
     NONE = "none"                    # Shared context (not recommended)
     PROCESS = "process"             # Separate process per verification
     CONTAINER = "container"         # Docker/container isolation
+    DISTRIBUTED = "distributed"     # Separate physical node (cluster)
     TEE = "tee"                     # Trusted Execution Environment
 
 
@@ -141,7 +144,10 @@ class BlindedContext:
             length=16
         )
 
-        # Sanitize benchmarks - remove any identifying info
+        # Sanitize benchmarks - remove any identifying info. The benchmark
+        # definition (target/tolerance, or prompt/rubric for model-judged
+        # benchmarks) is spec content, not provider identity, so it is safe to
+        # carry into the blinded context; only the SUBJECT's identity is hidden.
         sanitized_benchmarks = []
         for bm in spec.benchmarks:
             sanitized = {
@@ -150,7 +156,12 @@ class BlindedContext:
                 "tolerance": bm.tolerance,
                 "unit": bm.unit,
                 "lower_is_better": bm.lower_is_better,
+                "kind": getattr(bm, "kind", "numeric"),
             }
+            if getattr(bm, "kind", "numeric") == "rubric":
+                sanitized["prompt"] = getattr(bm, "prompt", "")
+                sanitized["rubric"] = getattr(bm, "rubric", "")
+                sanitized["expected"] = getattr(bm, "expected", "")
             sanitized_benchmarks.append(sanitized)
 
         return cls(
@@ -176,6 +187,7 @@ class VerificationCell:
     context_hash: str          # Hash of isolated context used
     abstain_count: int = 0     # Number of abstained benchmarks
     canary_detected: bool = False  # True if canary leaked (blinding failure)
+    verifier_locus: str = ""   # Where the verifier physically ran (audit)
 
     @property
     def is_self_verification(self) -> bool:
@@ -742,29 +754,43 @@ class CrossVerifier:
         await provider.initialize({})
 
         outputs = {}
-        abstain_count = 0
 
         for benchmark in spec.benchmarks:
             results = []
-            for _ in range(self.iterations):
-                result = await provider.execute_benchmark(
-                    benchmark.__dict__,
-                    {"spec": spec.metadata},
-                )
-                # Handle VerdictResponse objects
-                if hasattr(result, 'verdict'):
-                    if result.verdict == "ABSTAIN":
-                        abstain_count += 1
-                        results.append({"abstain": True, "reason": result.abstain_reason})
-                    else:
-                        results.append(result.value if result.value is not None else result)
+            abstain_count = 0
+            kind = getattr(benchmark, "kind", "numeric")
+
+            if kind == "rubric":
+                # Subject model produces a free-text answer to the prompt.
+                # Generated once at temperature 0 (deterministic-ish); the
+                # cross-verification iterations happen on the JUDGE side.
+                text = await provider.generate_response(getattr(benchmark, "prompt", ""))
+                if text and text.strip():
+                    results.append(text.strip())
                 else:
-                    results.append(result)
+                    abstain_count += 1
+                    results.append({"abstain": True, "reason": "empty subject response"})
+            else:
+                for _ in range(self.iterations):
+                    result = await provider.execute_benchmark(
+                        benchmark.__dict__,
+                        {"spec": spec.metadata},
+                    )
+                    # Handle VerdictResponse objects
+                    if hasattr(result, 'verdict'):
+                        if result.verdict == "ABSTAIN":
+                            abstain_count += 1
+                            results.append({"abstain": True, "reason": result.abstain_reason})
+                        else:
+                            results.append(result.value if result.value is not None else result)
+                    else:
+                        results.append(result)
 
             outputs[benchmark.id] = {
                 "results": results,
                 "benchmark": benchmark.__dict__,
                 "abstain_count": abstain_count,
+                "kind": kind,
             }
 
         return outputs
@@ -853,6 +879,53 @@ class CrossVerifier:
 
             total += 1
 
+            # --- Rubric benchmarks: REAL cross-provider model judgment ---
+            # The verifier model reads the (blinded) subject response and
+            # decides PASS/FAIL/ABSTAIN on the merits. It can disagree with
+            # other verifiers; that disagreement is what makes consensus mean
+            # something. This is NOT deterministic arithmetic.
+            if bm_spec.get("kind") == "rubric":
+                text_outputs = [v for v in bm_outputs if isinstance(v, str) and v.strip()]
+                if not text_outputs:
+                    abstain_count += 1
+                    continue
+                bm_pass = 0
+                bm_total = 0
+                judge_values: List[float] = []
+                for resp in text_outputs:
+                    if canary_id and canary_id.upper() in resp.upper():
+                        canary_detected = True
+                    jv = await verifier.judge_output(
+                        prompt=bm_spec.get("prompt", ""),
+                        response=resp,
+                        rubric=bm_spec.get("rubric", ""),
+                        expected=bm_spec.get("expected", ""),
+                    )
+                    if getattr(jv, "verdict", "ABSTAIN") == "ABSTAIN":
+                        continue
+                    bm_total += 1
+                    if jv.verdict == "PASS":
+                        bm_pass += 1
+                    judge_values.append(1.0 if jv.verdict == "PASS" else 0.0)
+                if bm_total == 0:
+                    abstain_count += 1
+                    continue
+                is_pass = (bm_pass / bm_total) >= 0.5
+                if is_pass:
+                    passed += 1
+                rubric_result = CVBenchmarkResult(
+                    benchmark_id=bm_spec["id"],
+                    values=judge_values,
+                    target=1.0,
+                    tolerance=0.0,
+                    unit="rubric",
+                    lower_is_better=False,
+                )
+                rubric_result.calculate_statistics()
+                rubric_result.passed = is_pass
+                results.append(rubric_result)
+                continue
+
             # Filter numeric values (exclude any remaining abstain markers)
             numeric_outputs = [
                 v for v in bm_outputs
@@ -924,6 +997,7 @@ class CrossVerifier:
             context_hash=context_hash,
             abstain_count=abstain_count,
             canary_detected=canary_detected,
+            verifier_locus=getattr(verifier, "execution_locus", "in-process"),
         )
 
 

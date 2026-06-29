@@ -4,7 +4,7 @@
 
 [![Protocol Version](https://img.shields.io/badge/protocol-v1.0.0-blue)](PROTOCOL.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![FAIR Principles](https://img.shields.io/badge/FAIR-Compliant-green)](docs/FAIR_COMPLIANCE.md)
+[![FAIR Principles](https://img.shields.io/badge/FAIR-aligned-green)](https://www.go-fair.org/fair-principles/)
 
 **AI-Verified Independent Replication** - A protocol for AI systems to independently verify each other through double-blind cross-provider verification, eliminating the "AI grading its own test" problem.
 
@@ -85,6 +85,40 @@ avir validate spec.json
 avir check attestation.json --public-key public.pem
 ```
 
+### Real-Model Verification (no SDK, v1.1+)
+
+For verification that actually invokes models, use the CLI providers (headless
+`claude` / `codex` / `gemini`, each a separate OS process) and/or HTTP/cluster
+providers (a model on another machine). Rubric benchmarks have the verifier
+model judge a blinded answer -- a real judgment that can disagree.
+
+```python
+from avir import Specification, BlindingMode, IsolationLevel
+from avir.cross_verification import CrossVerifier
+from avir.providers import ClaudeCLIProvider, GeminiCLIProvider, fedora_ollama, ailab_model
+
+spec = Specification.from_file("examples/cluster_demonstrator_spec.json")  # rubric
+cv = CrossVerifier(
+    providers=[
+        ClaudeCLIProvider(),                                              # Anthropic (process)
+        GeminiCLIProvider(),                                              # Google (process)
+        fedora_ollama("deepseek-v4-pro:cloud", organization="deepseek"), # node
+        ailab_model("ornith-9b", organization="deepreinforce"),          # node
+    ],
+    blinding_mode=BlindingMode.DOUBLE_BLIND,
+    isolation_level=IsolationLevel.DISTRIBUTED,
+    iterations=1,
+)
+matrix = await cv.verify(spec)
+print(matrix.consensus_verdict, matrix.agreement_score)
+```
+
+Each cell records a `verifier_locus` (e.g. `node:fedora.local/...`) so the
+attested isolation is auditable. See `examples/cluster_cross_verify.py` for a
+full run that emits a signed attestation. Numeric benchmarks remain deterministic
+arithmetic; the SDK providers (`ClaudeProvider`, etc.) require API keys and are
+not exercised in CI -- the CLI/cluster providers are the tested real-model path.
+
 ## How Cross-Verification Works
 
 ```
@@ -137,42 +171,54 @@ Cross-verification cells determine the final verdict
 
 ## Specification Format
 
+A specification has `avir_version`, `system`, `capabilities`, and `benchmarks`.
+Benchmarks are either `numeric` (measured value vs `target` within `tolerance`,
+verified by deterministic arithmetic) or `rubric` (a model answers `prompt` and
+verifier models from other providers judge the blinded answer against `rubric`).
+
 ```json
 {
-  "version": "1.0.0",
-  "metadata": {
-    "name": "My AI System Verification",
-    "description": "AVIR specification for verifying AI capabilities"
-  },
-  "system": {
-    "name": "my-ai-system",
-    "version": "1.0.0"
-  },
+  "avir_version": "1.0.0",
+  "system": { "name": "my-ai-system", "version": "1.0.0" },
+  "capabilities": [
+    {
+      "name": "throughput",
+      "description": "Operation throughput under load",
+      "category": "performance",
+      "benchmarks": ["throughput"]
+    },
+    {
+      "name": "reasoning",
+      "description": "Trap-aware arithmetic",
+      "category": "reasoning",
+      "benchmarks": ["bat_and_ball"]
+    }
+  ],
   "benchmarks": [
     {
       "id": "throughput",
-      "name": "Operation Throughput",
+      "kind": "numeric",
+      "description": "Operation Throughput",
+      "methodology": "measured by the system under test",
       "target": 100,
       "unit": "ops/s",
       "tolerance": 0.2,
-      "iterations": 5
+      "runs": 5
     },
     {
-      "id": "latency",
-      "name": "Response Latency",
-      "target": 50,
-      "unit": "ms",
-      "tolerance": 0.25,
-      "lower_is_better": true
+      "id": "bat_and_ball",
+      "kind": "rubric",
+      "description": "Cognitive-reflection arithmetic",
+      "prompt": "A bat and a ball cost $1.10. The bat costs $1.00 more than the ball. How much is the ball, in cents?",
+      "rubric": "PASS iff the final answer is 5 cents; 10 cents or anything else is FAIL.",
+      "expected": "5 cents (bat $1.05, ball $0.05)."
     }
-  ],
-  "cross_verification": {
-    "enabled": true,
-    "blinding_mode": "double_blind",
-    "exclude_self_verification": true
-  }
+  ]
 }
 ```
+
+See [Real-Model Verification](docs/REAL_MODEL_VERIFICATION.md) for rubric
+benchmarks and running across the CLI/cluster providers.
 
 ## Attestation Chain
 
@@ -268,9 +314,9 @@ avir-protocol/
 
 - [Protocol Specification](PROTOCOL.md) - Full technical specification
 - [Cross-Verification Guide](docs/CROSS_VERIFICATION.md) - Double-blind protocol details
-- [Benchmark Design](docs/BENCHMARK_DESIGN.md) - How to create benchmarks
-- [Attestation System](docs/ATTESTATION.md) - Cryptographic attestation
-- [API Reference](docs/API.md) - Python API documentation
+- [Real-Model Verification](docs/REAL_MODEL_VERIFICATION.md) - Rubric benchmarks, CLI/cluster providers, auditable isolation
+- [Changelog](CHANGELOG.md) - Version history
+- [Contributing](CONTRIBUTING.md) - Development and contribution guide
 
 ## Contributing
 
@@ -290,7 +336,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
   title = {AVIR Protocol: AI-Verified Independent Replication},
   author = {Shade, Marc},
   year = {2025},
-  url = {https://github.com/marcshade/avir-protocol},
+  url = {https://github.com/marc-shade/avir-protocol},
   note = {Cross-provider double-blind verification for AI systems}
 }
 ```

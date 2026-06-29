@@ -156,23 +156,56 @@ class GeminiProvider(AVIRProvider):
                 )
             raise
 
+    async def generate_response(self, prompt: str, *, system: str = "") -> str:
+        """Real subject generation via the Gemini SDK (requires a key).
+
+        Not exercised in CI; the tested real path is the CLI/cluster providers.
+        """
+        from .cli import _SUBJECT_SYSTEM
+        if not self._client:
+            await self.initialize({})
+        try:
+            full = (system or _SUBJECT_SYSTEM) + "\n\n" + prompt
+            resp = self._client.generate_content(full)
+            return (resp.text or "").strip()
+        except Exception:  # noqa: BLE001
+            return ""
+
+    async def judge_output(self, *, prompt, response, rubric, expected=""):
+        """Real verifier judgment via the Gemini SDK (requires a key)."""
+        from .cli import build_judge_prompt, parse_judgment
+        if not self._client:
+            await self.initialize({})
+        judge_prompt = build_judge_prompt(prompt, response, rubric, expected)
+        try:
+            resp = self._client.generate_content(judge_prompt)
+            text = resp.text or ""
+        except Exception as exc:  # noqa: BLE001
+            return VerdictResponse(
+                value=None, verdict="ABSTAIN",
+                abstain_reason=f"gemini judge call failed: {exc}",
+            )
+        return parse_judgment(text)
+
     async def _execute_with_safety_handling(
         self,
         benchmark_spec: Dict[str, Any],
         context: Dict[str, Any],
     ) -> VerdictResponse:
-        """Execute with safety handling for Gemini."""
-        import random
+        """Numeric benchmark execution.
 
-        # Simulate execution with variance
-        target = benchmark_spec.get('target', 100)
-        tolerance = benchmark_spec.get('tolerance', 0.2)
-        variance = target * tolerance * random.uniform(-0.3, 0.3)
-        value = target + variance
-
+        An LLM cannot physically MEASURE a numeric performance benchmark, so we
+        abstain rather than fabricate a value. Use rubric benchmarks for
+        model-judged verification.
+        """
+        del benchmark_spec, context
         return VerdictResponse(
-            value=value,
-            verdict="PASS" if abs(value - target) <= target * tolerance else "FAIL",
+            value=None,
+            verdict="ABSTAIN",
+            abstain_reason=(
+                "numeric measurement is not an LLM capability; "
+                "use a rubric benchmark for model judgment"
+            ),
             provider_metadata=self._model_version_info,
         )
 

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "avir-protocol"
-version = "1.0.0"
+version = "1.1.0"
 description = "AI-Verified Independent Replication Protocol - Cross-provider AI verification"
 readme = "README.md"
 license = {text = "MIT"}
@@ -82,11 +82,11 @@ full = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/marcshade/avir-protocol"
-Documentation = "https://github.com/marcshade/avir-protocol#readme"
-Repository = "https://github.com/marcshade/avir-protocol.git"
-Issues = "https://github.com/marcshade/avir-protocol/issues"
-Changelog = "https://github.com/marcshade/avir-protocol/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/marc-shade/avir-protocol"
+Documentation = "https://github.com/marc-shade/avir-protocol#readme"
+Repository = "https://github.com/marc-shade/avir-protocol.git"
+Issues = "https://github.com/marc-shade/avir-protocol/issues"
+Changelog = "https://github.com/marc-shade/avir-protocol/blob/main/CHANGELOG.md"
 
 [project.scripts]
 avir = "avir.cli:main"

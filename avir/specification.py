@@ -33,13 +33,26 @@ class Capability:
 
 @dataclass
 class BenchmarkSpec:
-    """Benchmark specification from document."""
+    """Benchmark specification from document.
+
+    Two kinds are supported:
+
+    * ``numeric`` (default) -- a measured value is compared against
+      ``target`` within ``tolerance``. Verification is a deterministic
+      arithmetic check (no model judgment is required or used).
+    * ``rubric`` -- a *subject* model answers ``prompt`` and one or more
+      *verifier* models (from different providers) independently judge the
+      answer against ``rubric``. This is the path that actually exercises
+      cross-provider model judgment and can produce genuine disagreement.
+      ``target``/``unit``/``tolerance``/``methodology`` are optional for
+      rubric benchmarks.
+    """
     id: str
-    description: str
-    methodology: str
-    target: float
-    unit: str
-    tolerance: float
+    description: str = ""
+    methodology: str = ""
+    target: float = 0.0
+    unit: str = ""
+    tolerance: float = 0.0
     lower_is_better: bool = False
     runs: int = 5
     warmup_runs: int = 0
@@ -47,6 +60,15 @@ class BenchmarkSpec:
     requirements: List[str] = field(default_factory=list)
     setup: List[str] = field(default_factory=list)
     teardown: List[str] = field(default_factory=list)
+    # Rubric-benchmark fields (model-judged verification)
+    kind: str = "numeric"          # "numeric" | "rubric"
+    prompt: str = ""               # task posed to the subject model
+    rubric: str = ""               # pass/fail criteria for verifier models
+    expected: str = ""             # optional natural-language expected behavior
+
+    @property
+    def is_rubric(self) -> bool:
+        return self.kind == "rubric"
 
 
 @dataclass
@@ -117,23 +139,29 @@ class Specification:
             )
             capabilities.append(cap)
 
-        # Parse benchmarks
+        # Parse benchmarks. Numeric benchmarks require target/unit/tolerance;
+        # rubric benchmarks (model-judged) only require id + prompt + rubric.
         benchmarks = []
         for bench_data in data['benchmarks']:
+            kind = bench_data.get('kind', 'numeric')
             bench = BenchmarkSpec(
                 id=bench_data['id'],
-                description=bench_data['description'],
-                methodology=bench_data['methodology'],
-                target=bench_data['target'],
-                unit=bench_data['unit'],
-                tolerance=bench_data['tolerance'],
+                description=bench_data.get('description', ''),
+                methodology=bench_data.get('methodology', ''),
+                target=bench_data.get('target', 0.0),
+                unit=bench_data.get('unit', ''),
+                tolerance=bench_data.get('tolerance', 0.0),
                 lower_is_better=bench_data.get('lower_is_better', False),
-                runs=bench_data.get('runs', 5),
+                runs=bench_data.get('runs', bench_data.get('iterations', 5)),
                 warmup_runs=bench_data.get('warmup_runs', 0),
                 outlier_policy=bench_data.get('outlier_policy', 'iqr'),
                 requirements=bench_data.get('requirements', []),
                 setup=bench_data.get('setup', []),
                 teardown=bench_data.get('teardown', []),
+                kind=kind,
+                prompt=bench_data.get('prompt', ''),
+                rubric=bench_data.get('rubric', ''),
+                expected=bench_data.get('expected', ''),
             )
             benchmarks.append(bench)
 
@@ -180,6 +208,10 @@ class Specification:
                     'requirements': bench.requirements,
                     'setup': bench.setup,
                     'teardown': bench.teardown,
+                    'kind': bench.kind,
+                    'prompt': bench.prompt,
+                    'rubric': bench.rubric,
+                    'expected': bench.expected,
                 }
                 for bench in self.benchmarks
             ],

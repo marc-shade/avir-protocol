@@ -6,7 +6,7 @@ Updated December 2025 with enhanced configuration and verdict handling.
 """
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Union
 
 
@@ -133,6 +133,51 @@ class AVIRProvider(ABC):
             Analysis including insights and recommendations
         """
         pass
+
+    async def generate_response(self, prompt: str, *, system: str = "") -> str:
+        """Generate a free-text response to a prompt (rubric benchmarks).
+
+        The *subject* model answers the benchmark prompt; verifier models
+        then judge that answer. Implementations should actually call the
+        model. The default returns an empty string, which the
+        cross-verification engine treats as an abstain (never a pass).
+        """
+        del prompt, system
+        return ""
+
+    async def judge_output(
+        self,
+        *,
+        prompt: str,
+        response: str,
+        rubric: str,
+        expected: str = "",
+    ) -> VerdictResponse:
+        """Judge another provider's (blinded) response against a rubric.
+
+        This is the real cross-provider verification primitive: a verifier
+        model decides PASS / FAIL / ABSTAIN on the merits, and can disagree
+        with other verifiers. The default abstains (it does not fake a
+        verdict) so a provider that cannot judge never silently passes work.
+        """
+        del prompt, response, rubric, expected
+        return VerdictResponse(
+            value=None,
+            verdict="ABSTAIN",
+            abstain_reason="provider does not implement rubric judgment",
+        )
+
+    @property
+    def execution_locus(self) -> str:
+        """Where this provider physically runs (for isolation auditing).
+
+        Real isolation is only meaningful if it can be audited. Subprocess
+        (CLI) providers report the local host; cluster providers report the
+        remote node they dispatch to. The cross-verification matrix records
+        this per cell so the attested isolation_level is verifiable, not a
+        bare label.
+        """
+        return "in-process"
 
     async def cleanup(self) -> None:
         """Cleanup provider resources."""

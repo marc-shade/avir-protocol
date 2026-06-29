@@ -1,0 +1,31 @@
+{
+  "avir_version": "1.0.0",
+  "system": {
+    "name": "reasoning-demonstrator",
+    "version": "1.0.0",
+    "description": "AVIR cluster cross-verification demonstrator (cognitive-reflection trap)"
+  },
+  "metadata": {
+    "purpose": "Prove real cross-provider model judgment across separate cluster nodes",
+    "answer_key": "5 cents",
+    "note": "A known trap: weaker models answer 10 cents, so this spec is expected to surface genuine cross-provider disagreement."
+  },
+  "capabilities": [
+    {
+      "name": "arithmetic_reasoning",
+      "description": "Trap-aware basic arithmetic (cognitive reflection)",
+      "category": "reasoning",
+      "benchmarks": ["bat_and_ball"]
+    }
+  ],
+  "benchmarks": [
+    {
+      "id": "bat_and_ball",
+      "kind": "rubric",
+      "description": "Classic cognitive-reflection arithmetic trap",
+      "prompt": "A bat and a ball cost $1.10 in total. The bat costs $1.00 more than the ball. How much does the ball cost? Answer with the amount in cents and show your reasoning.",
+      "rubric": "PASS if and only if the final answer is 5 cents ($0.05) AND the reasoning is consistent (ball = $0.05, bat = $1.05, difference = $1.00, total = $1.10). The common wrong answer is 10 cents; 10 cents or any value other than 5 cents must be FAIL.",
+      "expected": "The ball costs 5 cents. bat = $1.05, ball = $0.05, difference $1.00, total $1.10."
+    }
+  ]
+}
