@@ -135,6 +135,28 @@ async def test_self_verification_excluded_and_locus_recorded():
     assert matrix.get_cell("alpha", "beta").verifier_locus == "fake:alpha"
 
 
+@pytest.mark.asyncio
+async def test_all_abstain_is_inconclusive_not_failed():
+    """A verifier that abstains on everything yields INCONCLUSIVE, not FAILED.
+
+    Regression: codex's CLI judgments did not emit a parseable VERDICT marker,
+    so every judgment abstained. A pure-abstention cell must not be labeled a
+    failure (absence of a verdict is not evidence the subject failed).
+    """
+    from avir.verdict import VerdictLevel
+    alpha = FakeProvider("alpha", "alpha says CORRECT", lambda r: "PASS")
+    silent = FakeProvider("silent", "silent CORRECT", lambda r: "ABSTAIN")
+    cv = CrossVerifier(providers=[alpha, silent], iterations=1)
+    matrix = await cv.verify(_rubric_spec())
+
+    cell = matrix.get_cell("silent", "alpha")  # silent verifier abstains on all
+    assert cell is not None
+    assert cell.verdict == VerdictLevel.INCONCLUSIVE
+    assert cell.abstain_count >= 1
+    # a real verifier still produces a verdict
+    assert matrix.get_cell("alpha", "silent").verdict == VerdictLevel.VERIFIED
+
+
 def test_parse_judgment_markers():
     assert parse_judgment("reasoning...\nCONFIDENCE: 0.9\nVERDICT: PASS").verdict == "PASS"
     assert parse_judgment("VERDICT: FAIL").verdict == "FAIL"

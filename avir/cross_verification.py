@@ -975,15 +975,18 @@ class CrossVerifier:
         effective_total = total - abstain_count
         if effective_total > 0:
             pass_rate = passed / effective_total
+            if pass_rate >= 0.8:
+                verdict = VerdictLevel.VERIFIED
+            elif pass_rate >= 0.5:
+                verdict = VerdictLevel.PARTIAL
+            else:
+                verdict = VerdictLevel.FAILED
         else:
+            # The verifier abstained on every benchmark (e.g. it could not
+            # produce a parseable judgment). That is INCONCLUSIVE, not a FAIL:
+            # absence of a verdict is not evidence the subject failed.
             pass_rate = 0.0
-
-        if pass_rate >= 0.8:
-            verdict = VerdictLevel.VERIFIED
-        elif pass_rate >= 0.5:
-            verdict = VerdictLevel.PARTIAL
-        else:
-            verdict = VerdictLevel.FAILED
+            verdict = VerdictLevel.INCONCLUSIVE
 
         execution_time = time.time() - start_time
 

@@ -83,6 +83,38 @@ matrix = await cv.verify(spec)
 print(matrix.consensus_verdict, matrix.agreement_score)
 ```
 
+## Verified demonstrator run (2026-06-29)
+
+`examples/cluster_cross_verify.py` against `cluster_demonstrator_spec.json`
+(the bat-and-ball cognitive-reflection trap), panel of five genuinely different
+providers across three processes and two physical GPU nodes:
+
+| Provider | Org | Locus |
+|----------|-----|-------|
+| claude | Anthropic | `subprocess:claude@Marcs-Mac-Studio.local` |
+| codex | OpenAI | `subprocess:codex@Marcs-Mac-Studio.local` |
+| gemini | Google | `subprocess:gemini@Marcs-Mac-Studio.local` |
+| deepseek-v4-pro | DeepSeek | `node:fedora.local/deepseek-v4-pro:cloud` |
+| ornith-9b | DeepReinforce | `node:ai-lab.local/ornith-9b` |
+
+Outcome: **consensus VERIFIED, agreement 1.0**; attestation `chain_verified=True`,
+Ed25519 `signature_verified=True`. Four verifiers (claude, gemini, deepseek,
+ornith) independently judged every subject's answer correct (5 cents). The
+`verifier_locus` of every cell confirms the work ran where claimed -- in
+separate processes and on separate machines.
+
+Honest notes on this run:
+- All subjects answered the trap correctly, so it produced unanimous agreement
+  rather than the PASS/FAIL disagreement the spec is designed to surface. It
+  demonstrates the pipeline, real model judgment, and cross-node isolation -- it
+  does not, this time, demonstrate disagreement resolution.
+- **codex abstained on every judgment**: its CLI output did not contain a
+  parseable `VERDICT:` marker, so `parse_judgment` abstained (it never guesses a
+  pass). Such all-abstain cells are labeled `INCONCLUSIVE` (a verdict labeling
+  fix in this release; before it they were mislabeled `FAILED`). Consensus was
+  unaffected because abstaining cells are excluded. Improving codex judge-output
+  parsing is a known follow-up.
+
 ## Honest scope
 
 Cross-provider verification breaks the *single-model* self-grading loop and

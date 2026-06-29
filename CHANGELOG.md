@@ -49,11 +49,25 @@ Real-model verification, cluster execution, and removal of simulated paths.
 - Corrected repository URLs from `marcshade` to `marc-shade` in `pyproject.toml`
   and the citation.
 
+### Fixed
+- A verification cell where the verifier abstained on **every** benchmark is now
+  labeled `INCONCLUSIVE` instead of `FAILED`. Absence of a verdict is not
+  evidence the subject failed. (Surfaced by a real cluster run where the codex
+  CLI emitted no parseable `VERDICT:` marker.)
+
+### Known issues
+- The codex CLI's judgment output is not reliably parsed into a `VERDICT:`
+  marker yet, so codex tends to ABSTAIN as a verifier. It still works as a
+  subject. Improving codex judge-output parsing is a follow-up.
+
 ### Notes
 - SDK provider rubric methods are real but not covered by CI (no keys). The
   CLI and cluster (HTTP) providers are the tested real-model path.
 - Numeric-benchmark verification remains deterministic arithmetic by design; no
   model judgment is used or implied there.
+- Verified end-to-end on the local cluster (5 providers, 3 processes + 2 GPU
+  nodes): consensus VERIFIED, agreement 1.0, signed attestation verified. See
+  `docs/REAL_MODEL_VERIFICATION.md`.
 
 ## [1.0.0]
 
