@@ -119,6 +119,38 @@ full run that emits a signed attestation. Numeric benchmarks remain deterministi
 arithmetic; the SDK providers (`ClaudeProvider`, etc.) require API keys and are
 not exercised in CI -- the CLI/cluster providers are the tested real-model path.
 
+### Verification Network (external verifiers, v1.2+)
+
+The network lets **independent operators** contribute their own compute and AI
+providers as external verification sources, so the graders are people you do not
+control. A coordinator daemon queues blinded jobs; verifier nodes pull work,
+judge with their own models, and submit **Ed25519-signed** verdicts; the
+requester re-verifies every signature locally. A persistent participant registry
+lets nodes find and verify each other.
+
+```bash
+# host a coordinator (job board daemon)
+avir-coordinator --host 127.0.0.1 --port 8770
+
+# anyone contributes a verifier node with their own model
+avir-verifier --coordinator http://HOST:8770 --provider claude-cli --org alice
+avir-verifier --coordinator http://HOST:8770 --provider http \
+              --endpoint http://localhost:11434 --model llama3 --org bob
+
+# request external verification (re-verifies every signature)
+avir-verify-remote --coordinator http://HOST:8770 --spec spec.json \
+                   --responses responses.json --min-verifiers 3 --require-distinct-orgs
+
+# or drive it from an agent over MCP
+AVIR_COORDINATOR=http://HOST:8770 avir-mcp
+```
+
+Trust model: the coordinator is untrusted for integrity (it cannot forge signed
+verdicts); consensus counts distinct verifier keys (optionally distinct orgs)
+and excludes the requester's own key. This is operator-level decentralization,
+not formal independent-lab replication; Sybil/collusion is only partially
+mitigated. Full detail and honest limits: [docs/NETWORK.md](docs/NETWORK.md).
+
 ## How Cross-Verification Works
 
 ```
@@ -315,6 +347,7 @@ avir-protocol/
 - [Protocol Specification](PROTOCOL.md) - Full technical specification
 - [Cross-Verification Guide](docs/CROSS_VERIFICATION.md) - Double-blind protocol details
 - [Real-Model Verification](docs/REAL_MODEL_VERIFICATION.md) - Rubric benchmarks, CLI/cluster providers, auditable isolation
+- [Verification Network](docs/NETWORK.md) - Distributed external verifiers, participant registry, signed verdicts, MCP server
 - [Changelog](CHANGELOG.md) - Version history
 - [Contributing](CONTRIBUTING.md) - Development and contribution guide
 
