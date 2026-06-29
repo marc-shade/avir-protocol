@@ -4,6 +4,15 @@
 
 Cross-provider verification is the **core innovation** of AVIR. It solves the fundamental problem of AI systems verifying their own capabilities by requiring multiple independent AI providers to verify each other using a double-blind protocol.
 
+> **Two benchmark kinds.** Numeric benchmarks are verified by deterministic
+> tolerance arithmetic (no model judgment). **Rubric benchmarks** have the
+> verifier *model* judge a blinded answer and can genuinely disagree -- that is
+> the path that exercises real cross-provider judgment. The examples below use
+> the SDK providers for brevity; for real model judgment without API keys use
+> the headless-CLI and cluster providers. See
+> [Real-Model Verification](REAL_MODEL_VERIFICATION.md). To distribute
+> verification across independent operators, see [the Network](NETWORK.md).
+
 ## The Problem
 
 When a single AI provider runs benchmarks on itself, several issues arise:
@@ -116,12 +125,19 @@ verifier = CrossVerifier(
 )
 ```
 
-| Level | Isolation | Use Case |
-|-------|-----------|----------|
-| `NONE` | Shared context | Development only |
-| `PROCESS` | Separate process | Default, good for most cases |
-| `CONTAINER` | Docker container | Enhanced isolation |
-| `TEE` | Trusted Execution Environment | Maximum security |
+| Level | Isolation | Status | Use Case |
+|-------|-----------|--------|----------|
+| `NONE` | Shared context | n/a | Development only |
+| `PROCESS` | Separate OS process | Implemented (CLI providers) | Default; each judgment runs in its own process |
+| `DISTRIBUTED` | Separate physical node | Implemented (HTTP/cluster providers, verification network) | Verifier runs on a different machine |
+| `CONTAINER` | Docker container | Reserved (label only) | Future: container isolation |
+| `TEE` | Trusted Execution Environment | Reserved (label only) | Future: maximum security |
+
+Isolation is auditable, not just a label: each `VerificationCell` records a
+`verifier_locus` (e.g. `subprocess:claude@host` or `node:fedora.local/model`)
+so the attested level can be checked against where the work actually ran.
+`PROCESS` and `DISTRIBUTED` are realized in code; `CONTAINER`/`TEE` are reserved
+enum values not yet enforced.
 
 ## Implementation
 

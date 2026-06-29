@@ -35,9 +35,22 @@ When a single AI provider claims certain capabilities, there's no independent ve
 ```bash
 pip install avir-protocol
 
-# Install with all AI providers
+# real-model providers via SDK (need API keys)
 pip install avir-protocol[all-providers]
+
+# cryptographic attestation + identity (Ed25519)
+pip install avir-protocol[crypto]
+
+# host a verification-network coordinator (FastAPI daemon + cert gen)
+pip install avir-protocol[network,crypto]
+
+# expose the network to an agent over MCP
+pip install avir-protocol[mcp]
 ```
+
+The headless-CLI providers (`claude`/`codex`/`gemini`) and the verifier/requester
+network clients are stdlib-only and need no extra install beyond the CLIs
+themselves.
 
 ### Cross-Provider Verification (Recommended)
 
@@ -185,12 +198,15 @@ Cross-verification cells determine the final verdict
 
 ### Isolation Levels
 
-| Level | Isolation | Description |
-|-------|-----------|-------------|
+| Level | Isolation | Status |
+|-------|-----------|--------|
 | **NONE** | Shared context | Not recommended |
-| **PROCESS** | Separate process | Default isolation |
-| **CONTAINER** | Docker isolation | Enhanced isolation |
-| **TEE** | Trusted Execution Environment | Maximum isolation |
+| **PROCESS** | Separate OS process (CLI providers) | Implemented |
+| **DISTRIBUTED** | Separate physical node (cluster/network) | Implemented |
+| **CONTAINER** | Docker isolation | Reserved (not yet enforced) |
+| **TEE** | Trusted Execution Environment | Reserved (not yet enforced) |
+
+Each cell records a `verifier_locus`, so the attested isolation is auditable.
 
 ## Verification Levels
 
@@ -292,12 +308,21 @@ Every verification produces a cryptographic attestation chain:
 
 ## Supported Providers
 
-| Provider | Status | Best For |
-|----------|--------|----------|
-| **Claude** (Anthropic) | Stable | Complex reasoning, analysis |
-| **GPT-4/Codex** (OpenAI) | Stable | Code-focused benchmarks |
-| **Gemini** (Google) | Stable | Multimodal verification |
-| **Ollama** (Local) | Beta | Privacy-preserving verification |
+Two families of provider, both implementing the same interface
+(`generate_response` + `judge_output`):
+
+| Provider | Class | Transport | Notes |
+|----------|-------|-----------|-------|
+| Claude CLI | `ClaudeCLIProvider` | `claude --print` subprocess | Anthropic; no SDK/key, real PROCESS isolation |
+| Codex CLI | `CodexCLIProvider` | `codex exec` subprocess | OpenAI; no SDK/key |
+| Gemini CLI | `GeminiCLIProvider` | `gemini -p` subprocess | Google; no SDK/key |
+| Any OpenAI-compatible endpoint | `HTTPModelProvider` (`fedora_ollama`, `ailab_model`) | HTTP `/v1/chat/completions` | ollama / vLLM / cluster GPU nodes; real DISTRIBUTED isolation |
+| Claude / OpenAI / Gemini SDK | `ClaudeProvider` / `OpenAIProvider` / `GeminiProvider` | vendor SDK | Require API keys; not exercised in CI |
+
+The CLI and HTTP providers are the tested real-model path and need no API keys
+(auth lives in the CLI or the endpoint). The SDK providers abstain on numeric
+benchmarks (an LLM cannot measure throughput) and judge rubric benchmarks when a
+key is present.
 
 ## Why Multiple Providers Matter
 
@@ -322,25 +347,35 @@ avir-protocol/
 │   ├── __init__.py
 │   ├── verifier.py          # Main verification engine
 │   ├── benchmark.py         # Benchmark execution
-│   ├── attestation.py       # Cryptographic attestation
-│   ├── cross_verification.py # Double-blind cross-provider
+│   ├── attestation.py       # Cryptographic attestation (Ed25519 chains)
+│   ├── cross_verification.py # Double-blind cross-provider matrix
 │   ├── verdict.py           # Verdict determination
-│   ├── specification.py     # Spec parsing/validation
+│   ├── specification.py     # Spec parsing (numeric + rubric benchmarks)
 │   ├── cli.py               # Command-line interface
-│   └── providers/           # AI provider integrations
-│       ├── base.py          # Abstract base class
-│       ├── claude.py        # Anthropic Claude
-│       ├── openai.py        # OpenAI GPT/Codex
-│       └── gemini.py        # Google Gemini
+│   ├── mcp_server.py        # MCP server (drive the network from an agent)
+│   ├── providers/           # AI provider integrations
+│   │   ├── base.py          # Abstract base (generate_response, judge_output)
+│   │   ├── cli.py           # Real-model: Claude/Codex/Gemini CLIs + HTTP/cluster
+│   │   ├── claude.py        # Anthropic Claude (SDK)
+│   │   ├── openai.py        # OpenAI GPT/Codex (SDK)
+│   │   └── gemini.py        # Google Gemini (SDK)
+│   └── network/             # Distributed verification network
+│       ├── keys.py          # Ed25519 identity (sign/verify/fingerprint)
+│       ├── protocol.py      # Verdict signing + consensus aggregation
+│       ├── registry.py      # Persistent participant/job/verdict store (sqlite)
+│       ├── coordinator.py   # FastAPI job-board daemon (avir-coordinator)
+│       ├── verifier.py      # Verifier node client (avir-verifier)
+│       ├── requester.py     # Requester client (avir-verify-remote)
+│       └── tls.py           # TLS certs + client SSL context (avir-gen-cert)
 ├── specs/                   # JSON schemas
-│   ├── specification.schema.json
-│   └── attestation.schema.json
-├── examples/                # Usage examples
-│   ├── basic_spec.json
-│   └── cross_verify_example.py
-├── tests/                   # Test suite
+├── examples/                # Usage examples (incl. cluster + network demos)
+├── deploy/                  # launchd setup for persistent coordinator/verifier
+├── tests/                   # Test suite (95 tests)
 └── docs/                    # Documentation
 ```
+
+CLI entry points: `avir`, `avir-coordinator`, `avir-verifier`,
+`avir-verify-remote`, `avir-gen-cert`, `avir-mcp`.
 
 ## Documentation
 

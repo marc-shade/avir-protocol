@@ -20,6 +20,14 @@ This document specifies the AVIR (AI-Verified Independent Replication) Protocol,
 10. [Verdict Determination](#10-verdict-determination)
 11. [Security Considerations](#11-security-considerations)
 12. [Extensibility](#12-extensibility)
+13. [Protocol Extensions (v1.1-v1.2)](#13-protocol-extensions-v11-v12)
+
+> **Note on versions.** Sections 1-12 describe the v1.0 core (numeric
+> benchmarks, container/process isolation, single-host cross-verification).
+> Section 13 documents backward-compatible extensions added in the reference
+> implementation v1.1-v1.2: model-judged (rubric) benchmarks, real-model
+> providers, distributed isolation, and the verification network. The on-wire
+> protocol version remains 1.0.0; extensions are additive.
 
 ---
 
@@ -746,6 +754,85 @@ avir/
 
 ---
 
+## 13. Protocol Extensions (v1.1-v1.2)
+
+These additive extensions are implemented in the reference library. The v1.0
+core above is unchanged; numeric benchmarks and their arithmetic verdicts work
+exactly as specified.
+
+### 13.1 Rubric (model-judged) benchmarks
+
+A benchmark MAY set `kind: "rubric"`. A rubric benchmark is judged by a verifier
+*model* rather than by arithmetic, and can produce genuine disagreement between
+verifiers. Fields:
+
+```yaml
+benchmarks:
+  - id: bat_and_ball
+    kind: rubric            # "numeric" (default) | "rubric"
+    prompt: "..."           # task posed to the subject model
+    rubric: "PASS iff ..."  # criteria the verifier model judges against
+    expected: "..."         # optional expected behavior
+```
+
+For rubric benchmarks `target`/`unit`/`tolerance`/`methodology` are optional. A
+verifier returns PASS / FAIL / ABSTAIN; a cell where the verifier abstains on
+every benchmark is INCONCLUSIVE (not FAILED). Numeric benchmarks remain
+deterministic arithmetic and use no model judgment.
+
+### 13.2 Real-model providers
+
+The provider contract gains two methods for rubric benchmarks:
+
+```python
+async def generate_response(self, prompt: str, *, system: str = "") -> str: ...
+async def judge_output(self, *, prompt, response, rubric, expected="") -> VerdictResponse: ...
+```
+
+Reference providers (no vendor SDK required):
+- `ClaudeCLIProvider`, `CodexCLIProvider`, `GeminiCLIProvider` -- shell out to the
+  headless CLIs; each call is a separate OS process.
+- `HTTPModelProvider` -- any OpenAI-compatible `/v1/chat/completions` endpoint
+  (e.g. ollama on a GPU node).
+
+The SDK providers (`claude`/`openai`/`gemini`) require API keys and abstain on
+numeric benchmarks (a model cannot measure throughput). See
+[docs/REAL_MODEL_VERIFICATION.md](REAL_MODEL_VERIFICATION.md).
+
+### 13.3 Distributed isolation
+
+`IsolationLevel.DISTRIBUTED` denotes verification on a separate physical node.
+Every `VerificationCell` records a `verifier_locus` (`subprocess:<id>@host` or
+`node:<host>/<model>`) so the attested isolation level is auditable rather than a
+bare label. `PROCESS` and `DISTRIBUTED` are implemented; `CONTAINER`/`TEE` are
+reserved.
+
+### 13.4 Verification network
+
+A coordinator/verifier/requester layer turns single-host cross-verification into
+a distributed service where independent operators contribute their own compute
+and models:
+
+- **Coordinator** (`avir-coordinator`): a job-board daemon. Untrusted for
+  integrity -- it verifies and stores Ed25519-signed verdicts but cannot forge
+  them. Rejects forged signatures and double-votes.
+- **Participant registry**: a persistent directory (`GET /verifiers`) of
+  participants (pubkey, fingerprint, org, models, activity).
+- **Verifier node** (`avir-verifier`): pulls blinded jobs, judges with its own
+  provider, signs, submits. Credentials never leave the operator's machine.
+- **Requester** (`avir-verify-remote`) / **MCP** (`avir-mcp`): submit a job and
+  re-verify every signature locally; consensus counts distinct verifier keys
+  (optionally distinct organizations), excluding the requester's own key, with a
+  `min_verifiers` quorum gate.
+- **Transport**: all coordinator traffic is TLS (HTTPS); clients trust a
+  self-signed coordinator via `AVIR_CA_BUNDLE`.
+
+This is operator-level decentralization, not formal independent-lab replication;
+Sybil/collusion is only partially mitigated (distinct-key/org thresholds). Full
+detail and honest limits: [docs/NETWORK.md](NETWORK.md).
+
+---
+
 ## Appendix A: JSON Schemas
 
 ### A.1 Specification Schema
@@ -843,9 +930,14 @@ See the `avir/` directory for the reference Python implementation of this protoc
 
 ## Version History
 
-| Version | Date | Changes |
-|---------|------|---------|
-| 1.0.0 | 2025-01-15 | Initial release |
+Protocol core version: 1.0.0. Reference-implementation (package) versions:
+
+| Version | Changes |
+|---------|---------|
+| 1.0.0 | Initial release: numeric benchmarks, container/process isolation, single-host double-blind cross-verification, Ed25519 attestation |
+| 1.1.0 | Rubric (model-judged) benchmarks; real-model CLI + cluster providers; DISTRIBUTED isolation + auditable `verifier_locus`; removed simulated benchmark execution |
+| 1.2.0 | Verification network (coordinator/verifier/requester), persistent participant registry, signed verdicts, MCP server |
+| 1.2.1 | TLS for all network traffic; `avir-gen-cert`; launchd deploy tooling |
 
 ---
 
