@@ -18,7 +18,7 @@ Why Cross-Provider Verification Matters:
   verification network where no single provider can unilaterally claim capability.
 """
 
-__version__ = "1.2.0"
+__version__ = "1.2.1"
 __protocol_version__ = "1.0.0"
 
 from .verifier import AVIRVerifier

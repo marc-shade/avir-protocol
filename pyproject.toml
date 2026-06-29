@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "avir-protocol"
-version = "1.2.0"
+version = "1.2.1"
 description = "AI-Verified Independent Replication Protocol - Cross-provider AI verification"
 readme = "README.md"
 license = {text = "MIT"}
@@ -65,6 +65,7 @@ crypto = [
 network = [
     "fastapi>=0.110",
     "uvicorn>=0.27",
+    "cryptography>=41.0.0",
 ]
 mcp = [
     "mcp>=1.0",
@@ -102,6 +103,7 @@ avir = "avir.cli:main"
 avir-coordinator = "avir.network.coordinator:main"
 avir-verifier = "avir.network.verifier:main"
 avir-verify-remote = "avir.network.requester:main"
+avir-gen-cert = "avir.network.tls:main"
 avir-mcp = "avir.mcp_server:main"
 
 [tool.setuptools.packages.find]

@@ -94,6 +94,39 @@ AVIR_COORDINATOR=http://HOST:8770 avir-mcp     # stdio MCP server
 - Identity private keys are stored 0600 and never transmitted.
 - All DB access is parameterized; connections use a 30s busy timeout.
 
+## Encryption (TLS)
+
+All client/coordinator traffic travels over HTTPS/TLS. Generate a certificate
+and run the coordinator with it:
+
+```bash
+avir-gen-cert --host coordinator.example.com --host 100.x.y.z   # SAN entries
+avir-coordinator --host 0.0.0.0 --port 8770 \
+                 --tls-cert ~/.avir/coordinator.crt --tls-key ~/.avir/coordinator.key
+```
+
+Clients trust a self-signed coordinator by pointing at its certificate (this is
+real verification, not a bypass):
+
+```bash
+export AVIR_CA_BUNDLE=/path/to/coordinator.crt
+avir-verifier --coordinator https://coordinator.example.com:8770 --provider claude-cli --org alice
+```
+
+With a publicly-issued certificate (Let's Encrypt, etc.), clients need nothing
+extra. `AVIR_INSECURE=1` disables verification and is for throwaway local dev
+only -- it enables MITM and prints a loud warning; prefer `AVIR_CA_BUNDLE`.
+
+The coordinator warns if bound beyond localhost without TLS. Verified end-to-end:
+HTTPS succeeds with the CA bundle, is correctly rejected without it
+(`CERTIFICATE_VERIFY_FAILED`), and plain HTTP is refused on the TLS port.
+
+Scope: TLS encrypts everything in transit (jobs, responses, verdicts, registry).
+It does not hide job content from the coordinator itself -- the coordinator is a
+relay and verifiers must read the prompt/response to judge them, and the set of
+verifiers is unknown at submission time, so end-to-end encryption to specific
+verifiers is not possible. Verdicts are additionally Ed25519-signed.
+
 ## Verified run (2026-06-29)
 
 `examples/network_local_demo.py` against a live coordinator daemon, three

@@ -190,13 +190,28 @@ def main() -> int:
                     help="bind address (default 127.0.0.1; use 0.0.0.0 to expose, deliberately)")
     ap.add_argument("--port", type=int, default=8770)
     ap.add_argument("--db", default=str(os.path.expanduser("~/.avir/coordinator.db")))
+    ap.add_argument("--tls-cert", default=os.environ.get("AVIR_TLS_CERT"),
+                    help="TLS certificate (PEM); enables HTTPS. Generate with avir-gen-cert.")
+    ap.add_argument("--tls-key", default=os.environ.get("AVIR_TLS_KEY"),
+                    help="TLS private key (PEM)")
     args = ap.parse_args()
     token = os.environ.get("AVIR_COORDINATOR_TOKEN")
-    if args.host != "127.0.0.1" and not token:
+    tls = bool(args.tls_cert and args.tls_key)
+    exposed = args.host not in ("127.0.0.1", "localhost", "::1")
+    if exposed and not token:
         print("WARNING: binding beyond localhost without AVIR_COORDINATOR_TOKEN; "
               "job submission is ungated.")
-    app = create_app(args.db, token=token)
-    uvicorn.run(app, host=args.host, port=args.port)
+    if exposed and not tls:
+        print("WARNING: binding beyond localhost WITHOUT TLS; traffic is unencrypted. "
+              "Generate a cert with `avir-gen-cert` and pass --tls-cert/--tls-key.")
+    scheme = "https" if tls else "http"
+    print(f"[coordinator] {scheme}://{args.host}:{args.port}  tls={tls}  auth={bool(token)}")
+    uvicorn.run(
+        app=create_app(args.db, token=token),
+        host=args.host, port=args.port,
+        ssl_certfile=args.tls_cert if tls else None,
+        ssl_keyfile=args.tls_key if tls else None,
+    )
     return 0
 
 

@@ -3,6 +3,33 @@
 All notable changes to AVIR Protocol are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/); versions follow SemVer.
 
+## [1.2.1]
+
+Transport encryption and deployment.
+
+### Added
+- **TLS for all client/coordinator traffic** (`avir.network.tls`). The
+  coordinator accepts `--tls-cert/--tls-key` (or `AVIR_TLS_CERT/KEY`) and serves
+  HTTPS; it warns when bound beyond localhost without TLS.
+- **`avir-gen-cert`** -- generate a self-signed coordinator certificate (SAN per
+  `--host`). Clients trust a self-signed coordinator via `AVIR_CA_BUNDLE`
+  (real verification); `AVIR_INSECURE=1` disables verification (dev only) and
+  prints a loud MITM warning.
+- Verifier and requester clients use the configured SSL context for all calls.
+- `deploy/setup_launchd.sh` + `deploy/README.md`: stand up a persistent,
+  TLS-enabled, token-gated coordinator and verifier as launchd services
+  (RunAtLoad + KeepAlive + reboot-survival).
+- `tests/test_tls.py`. Verified end-to-end: HTTPS succeeds with the CA bundle,
+  is rejected without it (`CERTIFICATE_VERIFY_FAILED`), and plain HTTP is refused
+  on the TLS port. Full suite 95 passing.
+
+### Security
+- Coordinator warns on non-localhost bind without TLS and/or without
+  `AVIR_COORDINATOR_TOKEN`. Certs/keys/tokens written `0600`.
+- TLS encrypts all data in transit (jobs, responses, verdicts, registry). It
+  does not hide content from the coordinator relay (verifiers must read it);
+  verdicts remain Ed25519-signed independent of TLS.
+
 ## [1.2.0]
 
 Distributed verification network: independent operators contribute their own

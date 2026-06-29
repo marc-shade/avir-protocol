@@ -33,11 +33,22 @@ from ..providers import (
 )
 from .keys import fingerprint, load_or_create_identity
 from .protocol import sign_verdict
+from .tls import default_client_context
+
+_CTX = None
+
+
+def _ctx():
+    """Cached client SSL context (used for https:// coordinators)."""
+    global _CTX
+    if _CTX is None:
+        _CTX = default_client_context()
+    return _CTX
 
 
 def _get(base: str, path: str, timeout: float = 30.0) -> dict[str, Any]:
     req = urllib.request.Request(base.rstrip("/") + path, method="GET")
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with urllib.request.urlopen(req, timeout=timeout, context=_ctx()) as resp:
         return json.loads(resp.read().decode())
 
 
@@ -47,7 +58,7 @@ def _post(base: str, path: str, body: dict[str, Any], timeout: float = 30.0) -> 
         base.rstrip("/") + path, data=data,
         headers={"Content-Type": "application/json"}, method="POST",
     )
-    with urllib.request.urlopen(req, timeout=timeout) as resp:
+    with urllib.request.urlopen(req, timeout=timeout, context=_ctx()) as resp:
         return json.loads(resp.read().decode())
 
 
