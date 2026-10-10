@@ -107,6 +107,47 @@ def test_consensus_abstain_only_inconclusive():
     recs = [_record("k1", "a", "ABSTAIN"), _record("k2", "b", "ABSTAIN"), _record("k3", "c", "ABSTAIN")]
     c = aggregate_consensus(recs, min_verifiers=3)
     assert c["overall_verdict"] == "INCONCLUSIVE"
+    assert c["quorum_met"] is False
+
+
+def test_consensus_abstentions_do_not_count_toward_quorum():
+    # 4 keys submitted, but only 2 judged: the 2026-10-10 fleet job that reported
+    # quorum_met=True with half the verifiers abstaining.
+    recs = [_record("k1", "a", "PASS"), _record("k2", "b", "PASS"),
+            _record("k3", "c", "ABSTAIN"), _record("k4", "d", "ABSTAIN")]
+    c = aggregate_consensus(recs, min_verifiers=3)
+    assert c["distinct_verifiers"] == 4
+    assert c["quorum_met"] is False
+    assert c["overall_verdict"] == "INCONCLUSIVE"
+    assert c["benchmarks"]["q1"]["quorum_met"] is False
+    # one more decisive vote reaches quorum
+    c = aggregate_consensus(recs + [_record("k5", "e", "PASS")], min_verifiers=3)
+    assert c["quorum_met"] is True
+    assert c["overall_verdict"] == "VERIFIED"
+
+
+def test_consensus_quorum_is_per_benchmark():
+    # q1 has 3 decisive votes, q2 only 2: the job as a whole is below quorum.
+    def rec(pub, org, v1, v2):
+        return {"verifier_pubkey": pub, "verifier_org": org,
+                "verdicts": [{"benchmark_id": "q1", "verdict": v1},
+                             {"benchmark_id": "q2", "verdict": v2}]}
+    recs = [rec("k1", "a", "PASS", "PASS"), rec("k2", "b", "PASS", "FAIL"),
+            rec("k3", "c", "PASS", "ABSTAIN")]
+    c = aggregate_consensus(recs, min_verifiers=3)
+    assert c["benchmarks"]["q1"]["quorum_met"] is True
+    assert c["benchmarks"]["q2"]["quorum_met"] is False
+    assert c["quorum_met"] is False
+
+
+def test_consensus_distinct_orgs_counts_only_decisive_orgs():
+    # 3 orgs submitted, but org c abstained: 2 decisive orgs < 3.
+    recs = [_record("k1", "a", "PASS"), _record("k2", "b", "PASS"),
+            _record("k3", "c", "ABSTAIN"), _record("k4", "a", "PASS")]
+    c = aggregate_consensus(recs, min_verifiers=3, require_distinct_orgs=True)
+    assert c["distinct_orgs"] == 3
+    assert c["benchmarks"]["q1"]["decisive_orgs"] == 2
+    assert c["quorum_met"] is False
 
 
 def test_verifier_logs_abstain_reason(capsys):

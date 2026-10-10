@@ -3,6 +3,25 @@
 All notable changes to AVIR Protocol are documented here. Format loosely
 follows [Keep a Changelog](https://keepachangelog.com/); versions follow SemVer.
 
+## [Unreleased]
+
+### Changed
+- **Network quorum counts decisive votes only.** `aggregate_consensus` now
+  requires, for every benchmark, `min_verifiers` distinct keys (and distinct
+  orgs under `require_distinct_orgs`) voting PASS or FAIL. Previously any
+  submission counted, so a job could report `quorum_met=True` with most
+  verifiers abstaining. Each benchmark result carries `quorum_met` and
+  `decisive_orgs`; the coordinator keeps such a job open until enough decisive
+  votes arrive.
+
+### Added
+- Verifiers log the cause of every ABSTAIN; the requester prints decisive/total
+  votes per benchmark and warns on abstentions.
+- Coordinator `--no-access-log` flag.
+
+### Fixed
+- `pyyaml` declared as a dependency (clean installs failed on import).
+
 ## [1.2.1]
 
 Transport encryption and deployment.

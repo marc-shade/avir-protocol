@@ -823,7 +823,8 @@ and models:
 - **Requester** (`avir-verify-remote`) / **MCP** (`avir-mcp`): submit a job and
   re-verify every signature locally; consensus counts distinct verifier keys
   (optionally distinct organizations), excluding the requester's own key, with a
-  `min_verifiers` quorum gate.
+  `min_verifiers` quorum gate met per benchmark by decisive (PASS/FAIL) votes
+  only; abstentions never count toward quorum.
 - **Transport**: all coordinator traffic is TLS (HTTPS); clients trust a
   self-signed coordinator via `AVIR_CA_BUNDLE`.
 

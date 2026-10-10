@@ -72,6 +72,11 @@ def aggregate_consensus(
     verdict, confidence}]}. Records from ``exclude_pubkeys`` (e.g. the
     requester's own key) are dropped before counting.
 
+    Quorum counts only decisive (PASS/FAIL) votes: every benchmark needs
+    ``min_verifiers`` distinct keys (and, with ``require_distinct_orgs``, that
+    many distinct orgs) voting PASS or FAIL on it. An ABSTAIN is a submission,
+    not a judgment, so it never counts toward quorum.
+
     Returns a dict with per-benchmark results, the overall verdict, the number
     of distinct verifiers/orgs that participated, and an agreement score.
     """
@@ -82,6 +87,7 @@ def aggregate_consensus(
 
     distinct_keys = {str(r.get("verifier_pubkey", "")) for r in records if r.get("verifier_pubkey")}
     distinct_orgs = {str(r.get("verifier_org", "")) for r in records if r.get("verifier_org")}
+    org_of = {str(r.get("verifier_pubkey", "")): str(r.get("verifier_org", "")) for r in records}
 
     # Collect judgments per benchmark, one vote per distinct verifier key.
     per_benchmark: dict[str, dict[str, str]] = {}
@@ -99,11 +105,18 @@ def aggregate_consensus(
     decided = 0
     for bm, votes in per_benchmark.items():
         verdict, pass_rate, n = _benchmark_consensus(list(votes.values()))
+        decisive_keys = {pub for pub, j in votes.items() if pub and j in ("PASS", "FAIL")}
+        decisive_orgs = {org_of[pub] for pub in decisive_keys if org_of.get(pub)}
+        bm_quorum = len(decisive_keys) >= min_verifiers
+        if require_distinct_orgs:
+            bm_quorum = bm_quorum and len(decisive_orgs) >= min_verifiers
         benchmarks[bm] = {
             "verdict": verdict,
             "pass_rate": pass_rate,
             "decisive_votes": n,
             "total_votes": len(votes),
+            "decisive_orgs": len(decisive_orgs),
+            "quorum_met": bm_quorum,
         }
         if verdict in ("PASS", "FAIL"):
             decided += 1
@@ -118,9 +131,7 @@ def aggregate_consensus(
 
     agreement_score = (agreeing_votes / total_votes) if total_votes else 0.0
 
-    quorum_ok = len(distinct_keys) >= min_verifiers
-    if require_distinct_orgs:
-        quorum_ok = quorum_ok and len(distinct_orgs) >= min_verifiers
+    quorum_ok = bool(benchmarks) and all(b["quorum_met"] for b in benchmarks.values())
 
     if not quorum_ok or decided == 0:
         overall = "INCONCLUSIVE"

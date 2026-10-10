@@ -53,7 +53,10 @@ GET /verifiers/{fp}       -> one participant by fingerprint or pubkey
 - Consensus = majority PASS/FAIL per benchmark across **distinct verifier keys**;
   optionally across **distinct organizations**; the **requester's own key is
   excluded**. Quorum (`min_verifiers`) must be met or the verdict is
-  `INCONCLUSIVE`.
+  `INCONCLUSIVE`. Quorum counts **decisive votes only**: every benchmark needs
+  `min_verifiers` distinct keys (and distinct orgs, when required) voting PASS
+  or FAIL on it; an ABSTAIN never counts. A job whose verifiers abstain stays
+  open until enough decisive votes arrive.
 
 ## Running it
 
