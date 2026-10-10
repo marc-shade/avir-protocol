@@ -194,6 +194,9 @@ def main() -> int:
                     help="TLS certificate (PEM); enables HTTPS. Generate with avir-gen-cert.")
     ap.add_argument("--tls-key", default=os.environ.get("AVIR_TLS_KEY"),
                     help="TLS private key (PEM)")
+    ap.add_argument("--no-access-log", action="store_true",
+                    help="suppress per-request access lines (every verifier polls /jobs/next "
+                         "every few seconds, so the access log grows without bound)")
     args = ap.parse_args()
     token = os.environ.get("AVIR_COORDINATOR_TOKEN")
     tls = bool(args.tls_cert and args.tls_key)
@@ -211,6 +214,7 @@ def main() -> int:
         host=args.host, port=args.port,
         ssl_certfile=args.tls_cert if tls else None,
         ssl_keyfile=args.tls_key if tls else None,
+        access_log=not args.no_access_log,
     )
     return 0
 
