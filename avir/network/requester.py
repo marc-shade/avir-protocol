@@ -135,6 +135,15 @@ def main() -> int:
           f"verifiers={c['distinct_verifiers']} orgs={c['distinct_orgs']}")
     print(f"[requester] CONSENSUS={c['overall_verdict']} agreement={c['agreement_score']:.2f} "
           f"(quorum_met={c['quorum_met']})")
+    # Quorum counts verifiers that submitted, abstentions included, so show how
+    # many votes per benchmark were actually decisive.
+    for bm_id, b in sorted(c.get("benchmarks", {}).items()):
+        print(f"[requester]   {bm_id}: {b['verdict']} "
+              f"({b['decisive_votes']}/{b['total_votes']} decisive votes)")
+    abstained = sum(b["total_votes"] - b["decisive_votes"] for b in c.get("benchmarks", {}).values())
+    if abstained:
+        print(f"[requester] WARNING: {abstained} abstention(s); quorum counts them, "
+              f"see the verifiers' logs for the cause")
     if checked["invalid_signatures"]:
         print(f"[requester] WARNING: {len(checked['invalid_signatures'])} invalid signature(s) excluded")
     return 0
