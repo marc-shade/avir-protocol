@@ -19,6 +19,7 @@ import argparse
 import asyncio
 import json
 import os
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -103,6 +104,11 @@ async def _judge_job(provider, job: dict[str, Any]) -> list[dict[str, Any]]:
                 decisive.append(v)
                 if jv.confidence is not None:
                     confidences.append(float(jv.confidence))
+            else:
+                # An abstention carries its cause; without this line a failing
+                # judge endpoint is indistinguishable from an undecided one.
+                reason = getattr(jv, "abstain_reason", None) or "no reason given"
+                print(f"[verifier] ABSTAIN on {bm_id}: {reason}", file=sys.stderr, flush=True)
         if not decisive:
             verdict = "ABSTAIN"
         else:

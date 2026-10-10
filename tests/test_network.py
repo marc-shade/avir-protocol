@@ -109,6 +109,24 @@ def test_consensus_abstain_only_inconclusive():
     assert c["overall_verdict"] == "INCONCLUSIVE"
 
 
+def test_verifier_logs_abstain_reason(capsys):
+    """A judge call that fails must leave its cause in the verifier log, not just ABSTAIN."""
+    import asyncio
+    from avir.network.verifier import _judge_job
+    from avir.providers.base import VerdictResponse
+
+    class FailingJudge:
+        async def judge_output(self, **_kw):
+            return VerdictResponse(value=None, verdict="ABSTAIN",
+                                   abstain_reason="http:m judge call failed: HTTP Error 503")
+
+    job = {"benchmarks": [{"benchmark_id": "q1", "prompt": "p", "rubric": "r"}],
+           "subject_responses": {"q1": ["answer"]}}
+    verdicts = asyncio.run(_judge_job(FailingJudge(), job))
+    assert verdicts == [{"benchmark_id": "q1", "verdict": "ABSTAIN", "confidence": None}]
+    assert "ABSTAIN on q1: http:m judge call failed: HTTP Error 503" in capsys.readouterr().err
+
+
 # --------------------------------------------------------------------------
 # coordinator end-to-end (FastAPI TestClient)
 # --------------------------------------------------------------------------
