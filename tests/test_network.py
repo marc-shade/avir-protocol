@@ -256,6 +256,56 @@ def test_coordinator_rejects_duplicate_verdict(client):
     assert client.post(f"/jobs/{job_id}/verdicts", json=body).status_code == 409
 
 
+def _age_job(db_path, job_id, seconds):
+    import sqlite3
+    from datetime import datetime, timedelta, timezone
+    old = (datetime.now(timezone.utc) - timedelta(seconds=seconds)).isoformat()
+    with sqlite3.connect(db_path) as c:
+        c.execute("UPDATE jobs SET created_at=? WHERE job_id=?", (old, job_id))
+
+
+def test_job_below_quorum_expires_after_ttl(tmp_path):
+    """A job stuck below decisive quorum is expired, not served or accepted forever."""
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+    from avir.network.coordinator import create_app
+    db = str(tmp_path / "c.db")
+    tc = TestClient(create_app(db, job_ttl_s=60))
+    priv, pub = keys.generate_keypair()
+    _, other = keys.generate_keypair()
+    job_id = tc.post("/jobs", json={"spec": _spec(), "subject_responses": {"q1": ["x"]},
+                                    "min_verifiers": 2}).json()["job_id"]
+    # one verifier abstains: below quorum, still open and still served to others
+    verdicts = [{"benchmark_id": "q1", "verdict": "ABSTAIN", "confidence": None}]
+    assert tc.post(f"/jobs/{job_id}/verdicts", json={
+        "verifier_pubkey": pub.hex(), "verifier_org": "a", "verifier_model": "m",
+        "verdicts": verdicts, "signature": sign_verdict(priv, job_id, verdicts)}).json()["quorum_met"] is False
+    assert tc.get(f"/jobs/{job_id}").json()["status"] == "open"
+    assert tc.get(f"/jobs/next?pubkey={other.hex()}").json()["job"]["job_id"] == job_id
+
+    _age_job(db, job_id, 61)
+    assert tc.get(f"/jobs/{job_id}").json()["status"] == "expired"
+    assert tc.get(f"/jobs/next?pubkey={other.hex()}").json()["job"] is None
+    late = [{"benchmark_id": "q1", "verdict": "PASS", "confidence": 1.0}]
+    priv2, pub2 = keys.generate_keypair()
+    r = tc.post(f"/jobs/{job_id}/verdicts", json={
+        "verifier_pubkey": pub2.hex(), "verifier_org": "b", "verifier_model": "m",
+        "verdicts": late, "signature": sign_verdict(priv2, job_id, late)})
+    assert r.status_code == 410
+
+
+def test_job_ttl_zero_disables_expiry(tmp_path):
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+    from avir.network.coordinator import create_app
+    db = str(tmp_path / "c.db")
+    tc = TestClient(create_app(db, job_ttl_s=0))
+    job_id = tc.post("/jobs", json={"spec": _spec(), "subject_responses": {"q1": ["x"]},
+                                    "min_verifiers": 2}).json()["job_id"]
+    _age_job(db, job_id, 10 * 86400)
+    assert tc.get(f"/jobs/{job_id}").json()["status"] == "open"
+
+
 def test_job_submission_token_gate(tmp_path):
     pytest.importorskip("fastapi")
     from fastapi.testclient import TestClient

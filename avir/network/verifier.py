@@ -181,6 +181,10 @@ def main() -> int:
     while True:
         try:
             did = run_once(args.coordinator, priv, pub_hex, provider, org, model_label)
+        except urllib.error.HTTPError as exc:
+            # The coordinator answered but refused (e.g. 410: job expired while judging).
+            print(f"[verifier] coordinator rejected request: HTTP {exc.code} {exc.reason}")
+            did = False
         except urllib.error.URLError as exc:
             print(f"[verifier] coordinator unreachable: {exc}")
             did = False

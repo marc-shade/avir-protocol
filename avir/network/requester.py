@@ -98,7 +98,7 @@ def poll_result(coordinator: str, job_id: str, *, timeout_s: float = 600.0,
     deadline = time.monotonic() + timeout_s
     while True:
         result = _get(coordinator, f"/jobs/{job_id}")
-        if result.get("status") == "complete":
+        if result.get("status") in ("complete", "expired"):
             return result
         if time.monotonic() >= deadline:
             return result  # return whatever we have (may be sub-quorum)

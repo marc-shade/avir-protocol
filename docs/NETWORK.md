@@ -55,8 +55,10 @@ GET /verifiers/{fp}       -> one participant by fingerprint or pubkey
   excluded**. Quorum (`min_verifiers`) must be met or the verdict is
   `INCONCLUSIVE`. Quorum counts **decisive votes only**: every benchmark needs
   `min_verifiers` distinct keys (and distinct orgs, when required) voting PASS
-  or FAIL on it; an ABSTAIN never counts. A job whose verifiers abstain stays
-  open until enough decisive votes arrive.
+  or FAIL on it; an ABSTAIN never counts. A job below quorum stays open for
+  new verifiers until `--job-ttl` (default 3600 s) passes, then it is marked
+  `expired`: no longer served, late verdicts get HTTP 410, and its consensus
+  reads `INCONCLUSIVE`.
 
 ## Running it
 

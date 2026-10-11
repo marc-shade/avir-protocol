@@ -175,6 +175,15 @@ class Registry:
             ).fetchone()
         return _job_row(row) if row else None
 
+    def expire_open_jobs(self, created_before: str) -> int:
+        """Mark open jobs created before ``created_before`` (ISO UTC) as expired."""
+        with self._conn() as c:
+            cur = c.execute(
+                "UPDATE jobs SET status='expired' WHERE status='open' AND created_at < ?",
+                (created_before,),
+            )
+            return cur.rowcount
+
     def set_job_status(self, job_id: str, status: str) -> None:
         with self._conn() as c:
             c.execute("UPDATE jobs SET status=? WHERE job_id=?", (status, job_id))

@@ -15,6 +15,12 @@ follows [Keep a Changelog](https://keepachangelog.com/); versions follow SemVer.
   votes arrive.
 
 ### Added
+- **Job expiry.** The coordinator marks an open job `expired` once it is older
+  than `--job-ttl` seconds (default 3600; 0 disables). Expired jobs are not
+  served, late verdicts get HTTP 410, and the requester stops polling. Without
+  it a job below decisive quorum stayed open forever and new verifiers worked
+  through every stale job first. Verifiers log a refused request as such
+  instead of "coordinator unreachable".
 - Verifiers log the cause of every ABSTAIN; the requester prints decisive/total
   votes per benchmark and warns on abstentions.
 - Coordinator `--no-access-log` flag.

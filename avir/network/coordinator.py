@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from fastapi import FastAPI, Header, HTTPException
@@ -58,9 +58,22 @@ class VerdictBody(BaseModel):
     signature: str
 
 
-def create_app(db_path: str, *, token: Optional[str] = None) -> FastAPI:
+DEFAULT_JOB_TTL_S = 3600.0
+
+
+def create_app(db_path: str, *, token: Optional[str] = None,
+               job_ttl_s: float = DEFAULT_JOB_TTL_S) -> FastAPI:
+    """``job_ttl_s``: an open job older than this is marked ``expired`` and no
+    longer handed out or accepted. Quorum counts decisive votes only and each
+    verifier votes once per job, so without expiry a job whose verifiers
+    abstained would stay open forever. ``0`` disables expiry."""
     registry = Registry(db_path)
     app = FastAPI(title="AVIR Coordinator", version="1.1.0")
+
+    def expire_stale() -> None:
+        if job_ttl_s > 0:
+            cutoff = datetime.now(timezone.utc) - timedelta(seconds=job_ttl_s)
+            registry.expire_open_jobs(cutoff.isoformat())
 
     @app.get("/health")
     def health() -> dict[str, Any]:
@@ -106,6 +119,7 @@ def create_app(db_path: str, *, token: Optional[str] = None) -> FastAPI:
         if not pubkey:
             raise HTTPException(400, "pubkey query param required")
         registry.touch_verifier(pubkey, _now())
+        expire_stale()
         job = registry.next_open_job_for(pubkey)
         if job is None:
             return {"job": None}
@@ -133,9 +147,12 @@ def create_app(db_path: str, *, token: Optional[str] = None) -> FastAPI:
 
     @app.post("/jobs/{job_id}/verdicts")
     def submit_verdict(job_id: str, body: VerdictBody) -> dict[str, Any]:
+        expire_stale()
         job = registry.get_job(job_id)
         if job is None:
             raise HTTPException(404, "job not found")
+        if job["status"] == "expired":
+            raise HTTPException(410, "job expired before reaching quorum")
         verdicts = [v.model_dump() for v in body.verdicts]
         if not verify_verdict(body.verifier_pubkey, job_id, verdicts, body.signature):
             raise HTTPException(400, "signature verification failed")
@@ -160,6 +177,7 @@ def create_app(db_path: str, *, token: Optional[str] = None) -> FastAPI:
 
     @app.get("/jobs/{job_id}")
     def job_result(job_id: str) -> dict[str, Any]:
+        expire_stale()
         job = registry.get_job(job_id)
         if job is None:
             raise HTTPException(404, "job not found")
@@ -197,6 +215,9 @@ def main() -> int:
     ap.add_argument("--no-access-log", action="store_true",
                     help="suppress per-request access lines (every verifier polls /jobs/next "
                          "every few seconds, so the access log grows without bound)")
+    ap.add_argument("--job-ttl", type=float, default=DEFAULT_JOB_TTL_S,
+                    help="seconds an open job may wait for quorum before it is marked "
+                         f"expired (default {DEFAULT_JOB_TTL_S:.0f}; 0 disables)")
     args = ap.parse_args()
     token = os.environ.get("AVIR_COORDINATOR_TOKEN")
     tls = bool(args.tls_cert and args.tls_key)
@@ -210,7 +231,7 @@ def main() -> int:
     scheme = "https" if tls else "http"
     print(f"[coordinator] {scheme}://{args.host}:{args.port}  tls={tls}  auth={bool(token)}")
     uvicorn.run(
-        app=create_app(args.db, token=token),
+        app=create_app(args.db, token=token, job_ttl_s=args.job_ttl),
         host=args.host, port=args.port,
         ssl_certfile=args.tls_cert if tls else None,
         ssl_keyfile=args.tls_key if tls else None,
