@@ -116,9 +116,16 @@ verification level is L3 (multi-provider, no TEE).
 `avir check` fails on an unsigned attestation, a broken chain hash, or a bad
 signature. With `--public-key` it fails unless the attestation was signed by
 that key. Without it, the signature is checked against the key embedded in the
-attestation, which proves only self-consistency; the output says so. The
-signature covers the chain hash (spec, environment, results hash, timestamp),
-not the `verdict` field.
+attestation, which proves only self-consistency; the output says so.
+
+The signature covers the whole attestation document: the canonical JSON of
+every field except `signature` (sorted keys, compact separators), recorded as
+`"scope": "document"` in the signature object. Changing any field after signing
+makes verification fail. A signature without `scope` is the legacy format, which
+signed only the chain hash and so did not authenticate the verdict, results,
+system, verifier, environment, execution or level; legacy signatures never
+verify, and `avir check` reports them as LEGACY and exits 1. Re-run `verify`
+with `--sign` to produce a document-scope attestation.
 
 Exit codes: 0 success, 1 failure or error, 2 partial result (`verify` PARTIAL
 consensus, `compare` disagreeing verdicts).
@@ -316,7 +323,9 @@ Every verification produces a cryptographic attestation chain:
   },
   "signature": {
     "algorithm": "Ed25519",
-    "signature": "base64_encoded_signature"
+    "public_key": "base64_encoded_pubkey",
+    "signature": "base64_encoded_signature",
+    "scope": "document"
   }
 }
 ```

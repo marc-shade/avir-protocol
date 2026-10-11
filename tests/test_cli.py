@@ -352,10 +352,123 @@ def test_signed_attestation_contents(signed_attestation: dict[str, Any]) -> None
     assert data["verdict"] == "VERIFIED"
     assert data["verification_level"] == "L3"
     assert data["signature"]["algorithm"] == "Ed25519"
+    assert data["signature"]["scope"] == "document"
     assert base64.b64decode(data["signature"]["public_key"]) == signed_attestation["raw_pub"]
     cells = {b["cell"] for b in data["results"]["benchmarks"]}
     assert cells == {"claude->gemini", "gemini->claude"}
     assert "Attestation signed: Ed25519 key" in signed_attestation["proc"].stderr
+
+
+def _rechain(data: dict[str, Any]) -> None:
+    """Recompute chain_hash so chain integrity passes and only the signature
+    can catch the change."""
+    import hashlib
+
+    chain = data["attestation_chain"]
+    chain["chain_hash"] = hashlib.sha256(
+        f"{chain['spec_hash']}{chain['env_hash']}{chain['results_hash']}"
+        f"{chain['timestamp']}".encode()
+    ).hexdigest()
+
+
+def _tamper(data: dict[str, Any], section: str) -> None:
+    if section == "verdict":
+        data["verdict"] = "FAILED"
+    elif section == "results.benchmarks":
+        data["results"]["benchmarks"][0]["verdict"] = "FAIL"
+    elif section == "summary":
+        data["results"]["summary"]["passed"] += 1
+    elif section == "system":
+        data["system"]["version"] = "9.9.9"
+    elif section == "verifier":
+        data["verifier"]["model"] = "someone-else"
+    elif section == "environment":
+        data["environment"]["os"] = "plan9"
+    elif section == "execution":
+        data["execution"]["duration_seconds"] += 60
+    elif section == "verification_level":
+        data["verification_level"] = "L4"
+    elif section == "attestation_chain":
+        data["attestation_chain"]["timestamp"] = "2000-01-01T00:00:00Z"
+        _rechain(data)
+    else:
+        raise AssertionError(section)
+
+
+TAMPER_SECTIONS = [
+    "verdict", "results.benchmarks", "summary", "system", "verifier",
+    "environment", "execution", "verification_level", "attestation_chain",
+]
+
+
+@pytest.mark.parametrize("section", TAMPER_SECTIONS)
+def test_check_tampered_section_fails(
+    tmp_path: Path, signed_attestation: dict[str, Any], section: str
+) -> None:
+    data = json.loads(signed_attestation["path"].read_text())
+    _tamper(data, section)
+    path = tmp_path / "tampered.json"
+    path.write_text(json.dumps(data))
+    for extra in ([], ["--public-key", str(signed_attestation["pub"])]):
+        proc = run_cli("check", path, *extra)
+        assert proc.returncode == 1, (section, extra, proc.stdout)
+        assert "Chain integrity: VALID" in proc.stdout
+        assert "Signature: INVALID" in proc.stdout
+        assert "Signature: VALID" not in proc.stdout
+
+
+def _legacy_file(tmp_path: Path, signed: dict[str, Any], scope: str | None) -> Path:
+    """Re-sign the saved attestation in the legacy format (chain hash only)."""
+    sk = ed25519.Ed25519PrivateKey.generate()
+    data = json.loads(signed["path"].read_text())
+    data["signature"] = {
+        "algorithm": "Ed25519",
+        "public_key": base64.b64encode(sk.public_key().public_bytes_raw()).decode(),
+        "signature": base64.b64encode(
+            sk.sign(data["attestation_chain"]["chain_hash"].encode())
+        ).decode(),
+    }
+    if scope is not None:
+        data["signature"]["scope"] = scope
+    path = tmp_path / "legacy.json"
+    path.write_text(json.dumps(data))
+    return path
+
+
+def test_check_legacy_signature_fails(
+    tmp_path: Path, signed_attestation: dict[str, Any]
+) -> None:
+    path = _legacy_file(tmp_path, signed_attestation, scope=None)
+    proc = run_cli("check", path)
+    assert proc.returncode == 1
+    assert "Signature: LEGACY (content not authenticated)" in proc.stdout
+    assert "legacy signature" in proc.stderr
+    assert "does not authenticate the attestation content" in proc.stderr
+    assert "Signature: VALID" not in proc.stdout
+
+    proc = run_cli("compare", signed_attestation["path"], path)
+    assert proc.returncode == 1
+    assert "LEGACY" in proc.stdout
+
+
+def test_check_legacy_signature_with_scope_flipped_fails(
+    tmp_path: Path, signed_attestation: dict[str, Any]
+) -> None:
+    path = _legacy_file(tmp_path, signed_attestation, scope="document")
+    proc = run_cli("check", path)
+    assert proc.returncode == 1
+    assert "Signature: INVALID" in proc.stdout
+    assert "Signature: VALID" not in proc.stdout
+
+
+def test_check_unknown_scope_fails(
+    tmp_path: Path, signed_attestation: dict[str, Any]
+) -> None:
+    path = _legacy_file(tmp_path, signed_attestation, scope="chain")
+    proc = run_cli("check", path)
+    assert proc.returncode == 1
+    assert "Signature: UNSUPPORTED" in proc.stdout
+    assert "unsupported signature scope 'chain'" in proc.stderr
 
 
 def test_check_pinned_key_passes(signed_attestation: dict[str, Any]) -> None:
@@ -491,13 +604,26 @@ def test_compare(tmp_path: Path, signed_attestation: dict[str, Any]) -> None:
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "Consensus: YES" in proc.stdout
 
-    data = json.loads(first.read_text())
-    data["verdict"] = "FAILED"  # the verdict field is not signed
+    from avir.attestation import Attestation
+
+    # A genuinely signed attestation with a different verdict: disagreement.
+    other = Attestation.load(str(first))
+    other.verdict = "FAILED"
+    other.sign(ed25519.Ed25519PrivateKey.generate().private_bytes_raw())
     disagree = tmp_path / "disagree.json"
-    disagree.write_text(json.dumps(data))
+    other.save(str(disagree))
     proc = run_cli("compare", first, disagree)
-    assert proc.returncode == 2
+    assert proc.returncode == 2, proc.stdout + proc.stderr
     assert "Consensus: NO" in proc.stdout
+
+    # An edited verdict without re-signing is a signature failure.
+    data = json.loads(first.read_text())
+    data["verdict"] = "FAILED"
+    edited = tmp_path / "edited.json"
+    edited.write_text(json.dumps(data))
+    proc = run_cli("compare", first, edited)
+    assert proc.returncode == 1
+    assert "signature: INVALID" in proc.stdout
 
     data["attestation_chain"]["spec_hash"] = "0" * 64
     broken = tmp_path / "broken.json"

@@ -6,6 +6,8 @@ including hash chains and digital signatures.
 """
 
 import base64
+import binascii
+import copy
 import hashlib
 import json
 import platform
@@ -120,19 +122,39 @@ class AttestationChain:
         )
 
 
+# Signature scope: what the signed message covers.
+#   "document" -- the canonical serialization of the whole attestation
+#                 (``Attestation.signing_payload()``): every field except the
+#                 ``signature`` object itself.
+#   absent     -- legacy scope: only ``attestation_chain.chain_hash`` was
+#                 signed, which does not bind the verdict, results, system,
+#                 verifier, environment, execution or level fields. Legacy
+#                 signatures never verify (fail closed).
+SIGNATURE_SCOPE_DOCUMENT = "document"
+
+
 @dataclass
 class Signature:
     """Digital signature for attestation."""
-    algorithm: str  # Ed25519, RSA-SHA256
+    algorithm: str  # Ed25519
     public_key: str  # Base64 encoded
     signature: str   # Base64 encoded
+    scope: Optional[str] = None  # None = legacy chain-hash-only signature
+
+    @property
+    def is_legacy(self) -> bool:
+        """True for a signature without a recorded scope (chain hash only)."""
+        return self.scope is None
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data = {
             'algorithm': self.algorithm,
             'public_key': self.public_key,
             'signature': self.signature,
         }
+        if self.scope is not None:
+            data['scope'] = self.scope
+        return data
 
 
 @dataclass
@@ -179,6 +201,13 @@ class Attestation:
     # Final verdict
     verdict: str = ""
     verdict_details: str = ""
+
+    # The document this attestation was loaded from, kept so verification
+    # also covers fields that from_dict() does not parse back or recomputes
+    # (e.g. execution.duration_seconds, unknown keys).
+    _source: Optional[dict[str, Any]] = field(
+        default=None, init=False, repr=False, compare=False
+    )
 
     def __post_init__(self) -> None:
         if not self.verdict:
@@ -272,7 +301,7 @@ class Attestation:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Attestation":
         """Create attestation from dictionary."""
-        return cls(
+        attestation = cls(
             protocol_version=data['avir_protocol_version'],
             verification_level=VerificationLevel(data['verification_level']),
             system_name=data['system']['name'],
@@ -300,6 +329,8 @@ class Attestation:
             verdict=data['verdict'],
             verdict_details=data['verdict_details'],
         )
+        attestation._source = copy.deepcopy(data)
+        return attestation
 
     @classmethod
     def from_json(cls, json_str: str) -> "Attestation":
@@ -316,63 +347,108 @@ class Attestation:
         """Verify attestation chain integrity."""
         return self.chain.verify()
 
+    @staticmethod
+    def _canonical(document: dict[str, Any]) -> bytes:
+        """Deterministic JSON bytes: sorted keys, compact separators.
+
+        The document is passed through one JSON round trip first, so the
+        bytes are the same before save and after load (tuples become lists,
+        non-string keys become strings and sort as strings).
+        """
+        normalized = json.loads(json.dumps(document))
+        return json.dumps(
+            normalized, sort_keys=True, separators=(',', ':'), ensure_ascii=True,
+        ).encode()
+
+    def signing_payload(self) -> bytes:
+        """Bytes covered by a ``document``-scope signature.
+
+        The canonical serialization of ``to_dict()`` with the ``signature``
+        field removed.
+        """
+        document = self.to_dict()
+        del document['signature']
+        return self._canonical(document)
+
     def sign(self, private_key: bytes, algorithm: str = "Ed25519") -> None:
         """
-        Sign attestation with private key.
+        Sign the whole attestation document with a private key.
+
+        The signature covers ``signing_payload()`` and is recorded with
+        ``scope="document"``.
 
         Args:
-            private_key: Private key bytes
-            algorithm: Signing algorithm (Ed25519 recommended)
+            private_key: 32-byte raw Ed25519 private key
+            algorithm: Signing algorithm (only Ed25519 is supported)
         """
+        if algorithm != "Ed25519":
+            raise ValueError(f"Unsupported algorithm: {algorithm}")
         try:
             from cryptography.hazmat.primitives.asymmetric import ed25519
-
-            if algorithm == "Ed25519":
-                signing_key = ed25519.Ed25519PrivateKey.from_private_bytes(private_key)
-                signature_bytes = signing_key.sign(self.chain.chain_hash.encode())
-                public_key_bytes = signing_key.public_key().public_bytes_raw()
-
-                self.signature = Signature(
-                    algorithm=algorithm,
-                    public_key=base64.b64encode(public_key_bytes).decode(),
-                    signature=base64.b64encode(signature_bytes).decode(),
-                )
-            else:
-                raise ValueError(f"Unsupported algorithm: {algorithm}")
-
         except ImportError as e:
             raise RuntimeError("cryptography package required for signing") from e
 
+        signing_key = ed25519.Ed25519PrivateKey.from_private_bytes(private_key)
+        # The signed content is this object as it is now, not the document it
+        # may have been loaded from.
+        self._source = None
+        signature_bytes = signing_key.sign(self.signing_payload())
+        public_key_bytes = signing_key.public_key().public_bytes_raw()
+
+        self.signature = Signature(
+            algorithm=algorithm,
+            public_key=base64.b64encode(public_key_bytes).decode(),
+            signature=base64.b64encode(signature_bytes).decode(),
+            scope=SIGNATURE_SCOPE_DOCUMENT,
+        )
+
     def verify_signature(self) -> bool:
         """
-        Verify attestation signature.
+        Verify the attestation signature against its embedded public key.
+
+        Returns True only for an Ed25519 signature with ``scope="document"``
+        over ``signing_payload()``, and, for an attestation loaded from a
+        document, only if that document is exactly what this object
+        serializes to (no edited or extra fields that parsing drops or
+        recomputes). Legacy chain-hash-only signatures return False: they do
+        not authenticate the attestation content.
 
         Returns:
             True if signature is valid, False otherwise
         """
         if not self.signature:
             return False
+        if self.signature.scope != SIGNATURE_SCOPE_DOCUMENT:
+            return False
+        if self.signature.algorithm != "Ed25519":
+            return False
 
         try:
             from cryptography.exceptions import InvalidSignature
             from cryptography.hazmat.primitives.asymmetric import ed25519
-
-            if self.signature.algorithm == "Ed25519":
-                public_key = ed25519.Ed25519PublicKey.from_public_bytes(
-                    base64.b64decode(self.signature.public_key)
-                )
-                signature = base64.b64decode(self.signature.signature)
-
-                try:
-                    public_key.verify(signature, self.chain.chain_hash.encode())
-                    return True
-                except InvalidSignature:
-                    return False
-
-            return False
-
         except ImportError as e:
             raise RuntimeError("cryptography package required for signature verification") from e
+
+        payload = self.signing_payload()
+        if self._source is not None:
+            source = copy.deepcopy(self._source)
+            source.pop('signature', None)
+            if self._canonical(source) != payload:
+                return False
+
+        try:
+            public_key = ed25519.Ed25519PublicKey.from_public_bytes(
+                base64.b64decode(self.signature.public_key, validate=True)
+            )
+            signature = base64.b64decode(self.signature.signature, validate=True)
+        except (binascii.Error, ValueError):
+            return False
+
+        try:
+            public_key.verify(signature, payload)
+        except InvalidSignature:
+            return False
+        return True
 
 
 def create_attestation(

@@ -462,7 +462,8 @@ ATTESTATION_CHAIN = {
   "signature": {
     "algorithm": "Ed25519",
     "public_key": "base64_encoded_pubkey",
-    "signature": "base64_encoded_signature"
+    "signature": "base64_encoded_signature",
+    "scope": "document"
   },
 
   "verdict": "VERIFIED",
@@ -486,18 +487,35 @@ def canonical_hash(data: dict) -> str:
 
 ### 7.4 Signature (Optional)
 
-For L3+ verification levels, attestations SHOULD be signed:
+For L3+ verification levels, attestations SHOULD be signed. The signature
+covers the whole document: the canonical JSON of the attestation with the
+`signature` field removed (sorted keys, separators `,` and `:`), and the
+signature object records `"scope": "document"`.
 
 ```python
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
-def sign_attestation(attestation: dict, private_key: bytes) -> str:
-    """Sign attestation chain hash."""
-    chain_hash = attestation['attestation_chain']['chain_hash']
+def signing_payload(attestation: dict) -> bytes:
+    """Canonical bytes of every field except the signature."""
+    document = {k: v for k, v in attestation.items() if k != 'signature'}
+    return json.dumps(document, sort_keys=True, separators=(',', ':')).encode()
+
+def sign_attestation(attestation: dict, private_key: bytes) -> dict:
+    """Return the document-scope signature object."""
     signing_key = ed25519.Ed25519PrivateKey.from_private_bytes(private_key)
-    signature = signing_key.sign(chain_hash.encode())
-    return base64.b64encode(signature).decode()
+    return {
+        'algorithm': 'Ed25519',
+        'public_key': base64.b64encode(
+            signing_key.public_key().public_bytes_raw()).decode(),
+        'signature': base64.b64encode(
+            signing_key.sign(signing_payload(attestation))).decode(),
+        'scope': 'document',
+    }
 ```
+
+A signature object without `scope` is the legacy format: it signed only
+`attestation_chain.chain_hash` and does not authenticate the rest of the
+document. Verifiers MUST reject it.
 
 ---
 
@@ -690,17 +708,17 @@ def verify_attestation(attestation: dict) -> bool:
 from cryptography.hazmat.primitives.asymmetric import ed25519
 
 def verify_signature(attestation: dict) -> bool:
-    """Verify attestation signature."""
-    sig_data = attestation['signature']
-    chain_hash = attestation['attestation_chain']['chain_hash']
-
-    public_key = ed25519.Ed25519PublicKey.from_public_bytes(
-        base64.b64decode(sig_data['public_key'])
-    )
-    signature = base64.b64decode(sig_data['signature'])
+    """Verify a document-scope attestation signature (section 7.4)."""
+    sig_data = attestation.get('signature') or {}
+    if sig_data.get('scope') != 'document' or sig_data.get('algorithm') != 'Ed25519':
+        return False  # unsigned, legacy chain-hash-only, or unknown scope
 
     try:
-        public_key.verify(signature, chain_hash.encode())
+        public_key = ed25519.Ed25519PublicKey.from_public_bytes(
+            base64.b64decode(sig_data['public_key'])
+        )
+        signature = base64.b64decode(sig_data['signature'])
+        public_key.verify(signature, signing_payload(attestation))
         return True
     except Exception:
         return False

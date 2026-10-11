@@ -36,6 +36,7 @@ from typing import Any
 
 from . import __protocol_version__, __version__
 from .attestation import (
+    SIGNATURE_SCOPE_DOCUMENT,
     Attestation,
     EnvironmentInfo,
     ProviderInfo,
@@ -366,9 +367,22 @@ def _signature_self_check(attestation: Attestation) -> bool:
         return attestation.verify_signature()
     except RuntimeError as exc:  # cryptography not installed
         raise CLIError(str(exc)) from exc
-    except (ValueError, binascii.Error):
-        # Malformed embedded key or signature encoding.
-        return False
+
+
+def _scope_problem(attestation: Attestation) -> str | None:
+    """Why the signature's scope cannot authenticate the document, if it cannot."""
+    signature = attestation.signature
+    if signature is None:
+        return None
+    if signature.is_legacy:
+        return (
+            "legacy signature: it covers only the chain hash and does not "
+            "authenticate the attestation content (verdict, results, system, "
+            "verifier, environment, execution, level)"
+        )
+    if signature.scope != SIGNATURE_SCOPE_DOCUMENT:
+        return f"unsupported signature scope {signature.scope!r}"
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -631,7 +645,7 @@ async def cmd_check(args: argparse.Namespace) -> int:
     print(f"Verification level: {attestation.verification_level.value}")
     print(f"Verifier: {attestation.verifier.provider} ({attestation.verifier.model})")
     print(f"Completed: {attestation.completed_at.isoformat()}Z")
-    print(f"Verdict: {attestation.verdict} (not covered by the signature)")
+    print(f"Verdict: {attestation.verdict}")
     print(f"Chain hash: {attestation.chain.chain_hash}")
 
     if not attestation.verify_integrity():
@@ -643,6 +657,13 @@ async def cmd_check(args: argparse.Namespace) -> int:
     if attestation.signature is None:
         print("Signature: MISSING")
         _err("attestation is unsigned; its origin cannot be verified")
+        return 1
+
+    scope_problem = _scope_problem(attestation)
+    if scope_problem is not None:
+        label = "LEGACY" if attestation.signature.is_legacy else "UNSUPPORTED"
+        print(f"Signature: {label} (content not authenticated)")
+        _err(scope_problem)
         return 1
 
     embedded = _embedded_public_key(attestation)
@@ -830,6 +851,12 @@ async def cmd_compare(args: argparse.Namespace) -> int:
         integrity = "VALID" if att.verify_integrity() else "INVALID"
         if att.signature is None:
             signature = "unsigned"
+        elif _scope_problem(att) is not None:
+            signature = (
+                "LEGACY (content not authenticated)"
+                if att.signature.is_legacy else "UNSUPPORTED scope"
+            )
+            failures += 1
         elif _signature_self_check(att):
             embedded = _embedded_public_key(att)
             signature = (

@@ -5,6 +5,21 @@ follows [Keep a Changelog](https://keepachangelog.com/); versions follow SemVer.
 
 ## [Unreleased]
 
+### Changed (attestation format)
+- **Attestation signatures cover the full document.** `Attestation.sign()`
+  signs `signing_payload()`: the canonical JSON (sorted keys, compact
+  separators) of `to_dict()` without the `signature` field, and records
+  `"scope": "document"` in the signature. Previously only
+  `attestation_chain.chain_hash` was signed, so verdict, results, summary,
+  system, verifier, environment, execution and verification level could be
+  edited without affecting the signature. `verify_signature()` also rejects a
+  loaded document whose fields differ from what the attestation serializes to
+  (for example an edited `execution.duration_seconds` or an added key).
+- **Legacy signatures fail closed.** A signature without `scope` (the old
+  chain-hash-only format) makes `verify_signature()` return False, and
+  `avir check` reports it as LEGACY and exits 1. Re-sign to upgrade. The
+  network verdict signatures (`avir.network`) are unchanged.
+
 ### Fixed
 - **`avir` CLI works against the library APIs.** Every command crashed before
   (`Specification.version`, `VerificationLevel(2)`, `Attestation.timestamp`,
@@ -14,7 +29,7 @@ follows [Keep a Changelog](https://keepachangelog.com/); versions follow SemVer.
     failure is an error instead of a warning next to an unsigned file.
   - `check` pins the signature to `--public-key` (PEM, hex or base64); a file
     signed by any other key fails. Without a key it says the key is
-    self-asserted. Unsigned attestations fail.
+    self-asserted. Unsigned and legacy-signed attestations fail.
   - `init` templates now pass `avir validate`; `init` no longer overwrites.
   - `compare` checks chain integrity and signatures before comparing.
   - `verify --model` is replaced by `--provider NAME=MODEL` (one model per
