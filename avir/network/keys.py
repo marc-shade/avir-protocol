@@ -53,7 +53,8 @@ def canonical(payload: Any) -> bytes:
 def sign(priv: bytes, message: bytes) -> str:
     """Ed25519-sign ``message``; return hex signature."""
     sk = ed25519.Ed25519PrivateKey.from_private_bytes(priv)
-    return sk.sign(message).hex()
+    sig_hex: str = sk.sign(message).hex()
+    return sig_hex
 
 
 def verify(pub_hex: str, message: bytes, sig_hex: str) -> bool:
