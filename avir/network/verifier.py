@@ -19,6 +19,7 @@ import argparse
 import asyncio
 import json
 import os
+import ssl
 import sys
 import time
 import urllib.error
@@ -27,19 +28,21 @@ from pathlib import Path
 from typing import Any
 
 from ..providers import (
+    AVIRProvider,
     ClaudeCLIProvider,
     CodexCLIProvider,
     GeminiCLIProvider,
     HTTPModelProvider,
 )
+from ..urls import require_http_url
 from .keys import fingerprint, load_or_create_identity
 from .protocol import sign_verdict
 from .tls import default_client_context
 
-_CTX = None
+_CTX: ssl.SSLContext | None = None
 
 
-def _ctx():
+def _ctx() -> ssl.SSLContext:
     """Cached client SSL context (used for https:// coordinators)."""
     global _CTX
     if _CTX is None:
@@ -48,22 +51,26 @@ def _ctx():
 
 
 def _get(base: str, path: str, timeout: float = 30.0) -> dict[str, Any]:
-    req = urllib.request.Request(base.rstrip("/") + path, method="GET")
-    with urllib.request.urlopen(req, timeout=timeout, context=_ctx()) as resp:
-        return json.loads(resp.read().decode())
+    req = urllib.request.Request(require_http_url(base.rstrip("/") + path), method="GET")
+    # B310: scheme already restricted to http/https by require_http_url above.
+    with urllib.request.urlopen(req, timeout=timeout, context=_ctx()) as resp:  # nosec B310
+        payload: dict[str, Any] = json.loads(resp.read().decode())
+    return payload
 
 
 def _post(base: str, path: str, body: dict[str, Any], timeout: float = 30.0) -> dict[str, Any]:
     data = json.dumps(body).encode()
     req = urllib.request.Request(
-        base.rstrip("/") + path, data=data,
+        require_http_url(base.rstrip("/") + path), data=data,
         headers={"Content-Type": "application/json"}, method="POST",
     )
-    with urllib.request.urlopen(req, timeout=timeout, context=_ctx()) as resp:
-        return json.loads(resp.read().decode())
+    # B310: scheme already restricted to http/https by require_http_url above.
+    with urllib.request.urlopen(req, timeout=timeout, context=_ctx()) as resp:  # nosec B310
+        payload: dict[str, Any] = json.loads(resp.read().decode())
+    return payload
 
 
-def build_provider(args: argparse.Namespace):
+def build_provider(args: argparse.Namespace) -> AVIRProvider:
     if args.provider == "claude-cli":
         return ClaudeCLIProvider()
     if args.provider == "codex-cli":
@@ -81,7 +88,7 @@ def build_provider(args: argparse.Namespace):
     raise SystemExit(f"unknown provider: {args.provider}")
 
 
-async def _judge_job(provider, job: dict[str, Any]) -> list[dict[str, Any]]:
+async def _judge_job(provider: AVIRProvider, job: dict[str, Any]) -> list[dict[str, Any]]:
     """Judge every rubric benchmark in the job; one verdict per benchmark.
 
     Multiple subject responses for a benchmark are each judged and reduced to a
@@ -122,7 +129,7 @@ async def _judge_job(provider, job: dict[str, Any]) -> list[dict[str, Any]]:
     return verdicts
 
 
-def run_once(base: str, priv: bytes, pub_hex: str, provider, org: str, model_label: str) -> bool:
+def run_once(base: str, priv: bytes, pub_hex: str, provider: AVIRProvider, org: str, model_label: str) -> bool:
     """Pull one job, judge, sign, submit. Returns True if a job was processed."""
     resp = _get(base, f"/jobs/next?pubkey={pub_hex}")
     job = resp.get("job")

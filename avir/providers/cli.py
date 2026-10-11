@@ -27,6 +27,7 @@ import subprocess
 import urllib.request
 from typing import Any
 
+from ..urls import require_http_url
 from .base import AVIRProvider, ProviderConfig, VerdictResponse
 
 _VERDICT_RE = re.compile(r"VERDICT\s*[:=]\s*(PASS|FAIL|ABSTAIN)", re.IGNORECASE)
@@ -202,14 +203,16 @@ class CLIProvider(AVIRProvider):
         verdict.provider_metadata["verifier"] = self.execution_locus
         return verdict
 
-    async def execute_benchmark(self, benchmark_spec, context):
+    async def execute_benchmark(
+        self, benchmark_spec: dict[str, Any], context: dict[str, Any],
+    ) -> VerdictResponse:
         del benchmark_spec, context
         return VerdictResponse(
             value=None, verdict="ABSTAIN",
             abstain_reason="CLI providers verify rubric benchmarks, not numeric measurement",
         )
 
-    async def analyze_results(self, results):
+    async def analyze_results(self, results: list[dict[str, Any]]) -> dict[str, Any]:
         return {"provider": self._PROVIDER_ID, "model": self._model, "count": len(results)}
 
 
@@ -339,11 +342,13 @@ class HTTPModelProvider(AVIRProvider):
             "stream": False,
         }).encode()
         req = urllib.request.Request(
-            url, data=body, headers={"Content-Type": "application/json"}, method="POST",
+            require_http_url(url), data=body, headers={"Content-Type": "application/json"},
+            method="POST",
         )
 
         def _call() -> str:
-            with urllib.request.urlopen(req, timeout=self._timeout) as resp:
+            # B310: scheme already restricted to http/https by require_http_url above.
+            with urllib.request.urlopen(req, timeout=self._timeout) as resp:  # nosec B310
                 payload = json.loads(resp.read().decode())
             msg = payload["choices"][0]["message"]
             return msg.get("content") or msg.get("reasoning") or msg.get("thinking") or ""
@@ -378,19 +383,21 @@ class HTTPModelProvider(AVIRProvider):
         verdict.provider_metadata["verifier"] = self.execution_locus
         return verdict
 
-    async def execute_benchmark(self, benchmark_spec, context):
+    async def execute_benchmark(
+        self, benchmark_spec: dict[str, Any], context: dict[str, Any],
+    ) -> VerdictResponse:
         del benchmark_spec, context
         return VerdictResponse(
             value=None, verdict="ABSTAIN",
             abstain_reason="HTTP providers verify rubric benchmarks, not numeric measurement",
         )
 
-    async def analyze_results(self, results):
+    async def analyze_results(self, results: list[dict[str, Any]]) -> dict[str, Any]:
         return {"provider": self._provider_id, "model": self._model, "count": len(results)}
 
 
 # Convenience factories for the local cluster (see cluster-routing rules)
-def fedora_ollama(model: str, *, organization: str = "local", **kw) -> HTTPModelProvider:
+def fedora_ollama(model: str, *, organization: str = "local", **kw: Any) -> HTTPModelProvider:
     return HTTPModelProvider(
         endpoint="http://192.168.1.238:11434", model=model,
         provider_id=f"fedora:{model}", organization=organization,
@@ -398,7 +405,7 @@ def fedora_ollama(model: str, *, organization: str = "local", **kw) -> HTTPModel
     )
 
 
-def ailab_model(model: str, *, organization: str = "local", **kw) -> HTTPModelProvider:
+def ailab_model(model: str, *, organization: str = "local", **kw: Any) -> HTTPModelProvider:
     return HTTPModelProvider(
         endpoint="http://192.168.1.229:8080", model=model,
         provider_id=f"ailab:{model}", organization=organization,

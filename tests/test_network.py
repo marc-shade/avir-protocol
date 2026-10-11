@@ -350,3 +350,67 @@ def test_job_submission_token_gate(tmp_path):
     # correct token -> ok
     assert tc.post("/jobs", json={"spec": _spec(), "subject_responses": {}},
                    headers={"X-AVIR-Token": "secret"}).status_code == 200
+
+
+# --------------------------------------------------------------------------
+# outbound URL scheme guard (bandit B310)
+# --------------------------------------------------------------------------
+
+def test_require_http_url_allows_only_http_and_https():
+    from avir.urls import require_http_url
+    assert require_http_url("http://h:8770/jobs") == "http://h:8770/jobs"
+    assert require_http_url("HTTPS://h/x") == "HTTPS://h/x"
+    for bad in ("file:///etc/passwd", "ftp://h/x", "data:,x", "/relative/path", ""):
+        with pytest.raises(ValueError):
+            require_http_url(bad)
+
+
+def test_network_clients_refuse_file_urls_before_urlopen(monkeypatch):
+    import urllib.request
+
+    from avir.network import requester as rmod
+    from avir.network import verifier as vmod
+    opened = []
+    monkeypatch.setattr(urllib.request, "urlopen", lambda *a, **k: opened.append(a))
+    with pytest.raises(ValueError):
+        rmod._get("file:///etc", "/passwd")
+    with pytest.raises(ValueError):
+        rmod._post("file:///etc", "/passwd", {})
+    with pytest.raises(ValueError):
+        vmod._get("file:///etc", "/passwd")
+    with pytest.raises(ValueError):
+        vmod._post("file:///etc", "/passwd", {})
+    assert opened == []
+
+
+def test_http_model_provider_guard_abstains_on_file_endpoint_and_passes_http(monkeypatch):
+    import asyncio
+    import io
+    import json
+    import urllib.request
+
+    from avir.providers.cli import HTTPModelProvider
+    opened = []
+
+    class _Resp(io.BytesIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    def fake_urlopen(req, timeout=None):
+        opened.append(req.full_url)
+        body = {"choices": [{"message": {"content": "VERDICT: PASS\nCONFIDENCE: 0.9"}}]}
+        return _Resp(json.dumps(body).encode())
+
+    monkeypatch.setattr(urllib.request, "urlopen", fake_urlopen)
+    bad = HTTPModelProvider(endpoint="file:///etc", model="m")
+    jv = asyncio.run(bad.judge_output(prompt="p", response="r", rubric="x"))
+    assert jv.verdict == "ABSTAIN" and "scheme" in (jv.abstain_reason or "")
+    assert opened == []
+
+    good = HTTPModelProvider(endpoint="http://127.0.0.1:11434", model="m")
+    jv = asyncio.run(good.judge_output(prompt="p", response="r", rubric="x"))
+    assert jv.verdict == "PASS"
+    assert opened == ["http://127.0.0.1:11434/v1/chat/completions"]

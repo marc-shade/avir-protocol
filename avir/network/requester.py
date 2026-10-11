@@ -12,19 +12,21 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import ssl
 import time
 import urllib.request
 from pathlib import Path
 from typing import Any
 
+from ..urls import require_http_url
 from .keys import load_or_create_identity
 from .protocol import aggregate_consensus, verify_verdict
 from .tls import default_client_context
 
-_CTX = None
+_CTX: ssl.SSLContext | None = None
 
 
-def _ctx():
+def _ctx() -> ssl.SSLContext:
     """Cached client SSL context (used for https:// coordinators)."""
     global _CTX
     if _CTX is None:
@@ -38,17 +40,21 @@ def _post(base: str, path: str, body: dict[str, Any], token: str | None = None,
     if token:
         headers["X-AVIR-Token"] = token
     req = urllib.request.Request(
-        base.rstrip("/") + path, data=json.dumps(body).encode(),
+        require_http_url(base.rstrip("/") + path), data=json.dumps(body).encode(),
         headers=headers, method="POST",
     )
-    with urllib.request.urlopen(req, timeout=timeout, context=_ctx()) as resp:
-        return json.loads(resp.read().decode())
+    # B310: scheme already restricted to http/https by require_http_url above.
+    with urllib.request.urlopen(req, timeout=timeout, context=_ctx()) as resp:  # nosec B310
+        payload: dict[str, Any] = json.loads(resp.read().decode())
+    return payload
 
 
 def _get(base: str, path: str, timeout: float = 30.0) -> dict[str, Any]:
-    req = urllib.request.Request(base.rstrip("/") + path, method="GET")
-    with urllib.request.urlopen(req, timeout=timeout, context=_ctx()) as resp:
-        return json.loads(resp.read().decode())
+    req = urllib.request.Request(require_http_url(base.rstrip("/") + path), method="GET")
+    # B310: scheme already restricted to http/https by require_http_url above.
+    with urllib.request.urlopen(req, timeout=timeout, context=_ctx()) as resp:  # nosec B310
+        payload: dict[str, Any] = json.loads(resp.read().decode())
+    return payload
 
 
 def reverify_result(result: dict[str, Any]) -> dict[str, Any]:
@@ -90,7 +96,8 @@ def submit_job(
         "require_distinct_orgs": require_distinct_orgs,
         "requester_pubkey": requester_pubkey,
     }, token=token)
-    return resp["job_id"]
+    job_id: str = resp["job_id"]
+    return job_id
 
 
 def poll_result(coordinator: str, job_id: str, *, timeout_s: float = 600.0,
