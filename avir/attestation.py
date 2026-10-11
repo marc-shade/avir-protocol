@@ -86,7 +86,7 @@ class AttestationChain:
     timestamp: str
     chain_hash: str = ""
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.chain_hash:
             self.chain_hash = self.calculate_chain_hash()
 
@@ -180,7 +180,7 @@ class Attestation:
     verdict: str = ""
     verdict_details: str = ""
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         if not self.verdict:
             self.verdict = self._determine_verdict()
             self.verdict_details = self._generate_verdict_details()

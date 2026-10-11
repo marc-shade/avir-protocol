@@ -45,7 +45,7 @@ class AVIRVerifier:
         provider: str = "claude",
         model: Optional[str] = None,
         level: VerificationLevel = VerificationLevel.L2_STANDARD,
-        config: dict[str, Any] = None,
+        config: Optional[dict[str, Any]] = None,
     ):
         """
         Initialize verifier.
@@ -130,7 +130,7 @@ class AVIRVerifier:
 
     def create_suite(
         self,
-        executors: dict[str, Callable] = None,
+        executors: Optional[dict[str, Callable]] = None,
     ) -> BenchmarkSuite:
         """
         Create benchmark suite from specification.
@@ -161,7 +161,7 @@ class AVIRVerifier:
 
     async def execute_benchmarks(
         self,
-        context: dict[str, Any] = None,
+        context: Optional[dict[str, Any]] = None,
     ) -> list[BenchmarkVerdict]:
         """
         Execute all benchmarks in suite.
@@ -232,8 +232,8 @@ class AVIRVerifier:
     async def verify(
         self,
         spec_path: str | Path,
-        executors: dict[str, Callable] = None,
-        context: dict[str, Any] = None,
+        executors: Optional[dict[str, Callable]] = None,
+        context: Optional[dict[str, Any]] = None,
         spec_source: Optional[str] = None,
     ) -> "VerificationResult":
         """
@@ -256,10 +256,10 @@ class AVIRVerifier:
         self.environment = self._detect_environment()
 
         # Load specification
-        self.load_specification(spec_path)
+        specification = self.load_specification(spec_path)
 
         # Create benchmark suite
-        self.create_suite(executors)
+        suite = self.create_suite(executors)
 
         # Execute benchmarks
         await self.execute_benchmarks(context)
@@ -274,14 +274,14 @@ class AVIRVerifier:
 
         # Determine overall verdict
         verdict = determine_overall_verdict(
-            [v.to_dict() for v in self.suite.verdicts]
+            [v.to_dict() for v in suite.verdicts]
         )
 
         return VerificationResult(
-            specification=self.specification,
+            specification=specification,
             attestation=attestation,
             verdict=verdict,
-            benchmarks=self.suite.verdicts,
+            benchmarks=suite.verdicts,
         )
 
 

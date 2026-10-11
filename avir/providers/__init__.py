@@ -4,6 +4,8 @@ AVIR Provider Implementations
 AI provider integrations for AVIR verification.
 """
 
+from typing import Any
+
 from .base import AVIRProvider
 from .claude import ClaudeProvider
 from .cli import (
@@ -34,7 +36,7 @@ __all__ = [
 ]
 
 
-def get_provider(name: str, **kwargs) -> AVIRProvider:
+def get_provider(name: str, **kwargs: Any) -> AVIRProvider:
     """
     Get provider instance by name.
 
@@ -45,7 +47,7 @@ def get_provider(name: str, **kwargs) -> AVIRProvider:
     Returns:
         AVIRProvider instance
     """
-    providers = {
+    providers: dict[str, type[AVIRProvider]] = {
         "claude": ClaudeProvider,
         "openai": OpenAIProvider,
         "gemini": GeminiProvider,

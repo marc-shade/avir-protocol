@@ -65,12 +65,12 @@ class GeminiProvider(AVIRProvider):
         api_key: Optional[str] = None,
         model: str = DEFAULT_MODEL,
         config: Optional[GeminiConfig] = None,
-        **kwargs,
+        **kwargs: Any,
     ):
         self._api_key = api_key or os.environ.get("GOOGLE_API_KEY")
         self._model = model
         self._config = config or GeminiConfig(model=model, **kwargs)
-        self._client = None
+        self._client: Any = None
         self._model_version_info: Optional[dict] = None
 
     @property
@@ -170,7 +170,9 @@ class GeminiProvider(AVIRProvider):
         except Exception:  # noqa: BLE001
             return ""
 
-    async def judge_output(self, *, prompt, response, rubric, expected=""):
+    async def judge_output(
+        self, *, prompt: str, response: str, rubric: str, expected: str = "",
+    ) -> VerdictResponse:
         """Real verifier judgment via the Gemini SDK (requires a key)."""
         from .cli import build_judge_prompt, parse_judgment
         if not self._client:

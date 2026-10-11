@@ -305,7 +305,7 @@ def calculate_krippendorff_alpha(
 
     # Collect all valid pairs
     pairs = []
-    value_counts = {}
+    value_counts: dict[Any, int] = {}
 
     for item_ratings in ratings:
         valid_ratings = [r for r in item_ratings if r is not None]
@@ -753,10 +753,10 @@ class CrossVerifier:
         """Generate benchmark outputs from a provider."""
         await provider.initialize({})
 
-        outputs = {}
+        outputs: dict[str, Any] = {}
 
         for benchmark in spec.benchmarks:
-            results = []
+            results: list[Any] = []
             abstain_count = 0
             kind = getattr(benchmark, "kind", "numeric")
 
@@ -772,7 +772,8 @@ class CrossVerifier:
                     results.append({"abstain": True, "reason": "empty subject response"})
             else:
                 for _ in range(self.iterations):
-                    result = await provider.execute_benchmark(
+                    # Any: providers duck-type the VerdictResponse shape (hasattr below)
+                    result: Any = await provider.execute_benchmark(
                         benchmark.__dict__,
                         {"spec": spec.metadata},
                     )
@@ -809,7 +810,7 @@ class CrossVerifier:
         self._canary_registry[blinded.context_id] = blinded.canary_id
 
         # In double-blind mode, don't include subject identity
-        context = {
+        context: dict[str, Any] = {
             "context_id": blinded.context_id,
             "specification_hash": blinded.specification_hash,
             "benchmarks": blinded.benchmark_specs,

@@ -173,7 +173,7 @@ class Benchmark:
                 error=str(e),
             )
 
-    async def execute(self, context: dict[str, Any] = None) -> list[BenchmarkResult]:
+    async def execute(self, context: Optional[dict[str, Any]] = None) -> list[BenchmarkResult]:
         """
         Execute benchmark for specified number of runs.
 
@@ -297,7 +297,7 @@ class BenchmarkSuite:
     Manages benchmark lifecycle and aggregates results.
     """
 
-    def __init__(self, name: str, benchmarks: list[Benchmark] = None):
+    def __init__(self, name: str, benchmarks: Optional[list[Benchmark]] = None):
         self.name = name
         self.benchmarks = benchmarks or []
         self.verdicts: list[BenchmarkVerdict] = []
@@ -319,7 +319,7 @@ class BenchmarkSuite:
         """Add benchmark to suite."""
         self.benchmarks.append(benchmark)
 
-    async def execute_all(self, context: dict[str, Any] = None) -> list[BenchmarkVerdict]:
+    async def execute_all(self, context: Optional[dict[str, Any]] = None) -> list[BenchmarkVerdict]:
         """
         Execute all benchmarks in suite.
 

@@ -63,12 +63,12 @@ class OpenAIProvider(AVIRProvider):
         api_key: Optional[str] = None,
         model: str = DEFAULT_MODEL,
         config: Optional[OpenAIConfig] = None,
-        **kwargs,
+        **kwargs: Any,
     ):
         self._api_key = api_key or os.environ.get("OPENAI_API_KEY")
         self._model = model
         self._config = config or OpenAIConfig(model=model, **kwargs)
-        self._client = None
+        self._client: Any = None
         self._model_version_info: Optional[dict] = None
 
     @property
@@ -186,7 +186,9 @@ class OpenAIProvider(AVIRProvider):
         except Exception:  # noqa: BLE001
             return ""
 
-    async def judge_output(self, *, prompt, response, rubric, expected=""):
+    async def judge_output(
+        self, *, prompt: str, response: str, rubric: str, expected: str = "",
+    ) -> VerdictResponse:
         """Real verifier judgment via the OpenAI SDK (requires a key)."""
         from .cli import build_judge_prompt, parse_judgment
         if not self._client:
@@ -284,11 +286,3 @@ class SafetyRefusalError(Exception):
     """Raised when the model refuses due to safety policies."""
     pass
 
-
-@dataclass
-class VerdictResponse:
-    """Response from benchmark execution."""
-    value: Optional[float]
-    verdict: str  # PASS, FAIL, ABSTAIN
-    abstain_reason: Optional[str] = None
-    provider_metadata: Optional[dict] = None

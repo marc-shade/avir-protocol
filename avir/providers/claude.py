@@ -63,12 +63,12 @@ class ClaudeProvider(AVIRProvider):
         api_key: Optional[str] = None,
         model: str = DEFAULT_MODEL,
         config: Optional[ClaudeConfig] = None,
-        **kwargs,
+        **kwargs: Any,
     ):
         self._api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         self._model = model
         self._config = config or ClaudeConfig(model=model, **kwargs)
-        self._client = None
+        self._client: Any = None
         self._model_version_info: Optional[dict] = None
 
     @property
@@ -181,11 +181,14 @@ class ClaudeProvider(AVIRProvider):
                 system=system or _SUBJECT_SYSTEM,
                 messages=[{"role": "user", "content": prompt}],
             )
-            return msg.content[0].text.strip()
+            text: str = msg.content[0].text.strip()
+            return text
         except Exception:  # noqa: BLE001 - empty -> abstain upstream
             return ""
 
-    async def judge_output(self, *, prompt, response, rubric, expected=""):
+    async def judge_output(
+        self, *, prompt: str, response: str, rubric: str, expected: str = "",
+    ) -> VerdictResponse:
         """Real verifier judgment via the Anthropic SDK (requires a key)."""
         from .cli import build_judge_prompt, parse_judgment
         if not self._client:
