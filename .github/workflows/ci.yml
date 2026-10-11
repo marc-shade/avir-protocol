@@ -64,9 +64,17 @@ jobs:
 
       - name: Run security scan
         run: |
-          pip install bandit safety
           bandit -r avir/ -ll
-          safety check
+
+      # safety runs from its own venv against a frozen list of what the project
+      # installs: safety's own dependencies (e.g. nltk) are not ours to ship,
+      # and an advisory against them must not fail or mask our scan.
+      - name: Dependency vulnerability scan
+        run: |
+          pip freeze --exclude-editable > "$RUNNER_TEMP/requirements.txt"
+          python -m venv "$RUNNER_TEMP/safety"
+          "$RUNNER_TEMP/safety/bin/pip" install --quiet safety
+          "$RUNNER_TEMP/safety/bin/safety" check -r "$RUNNER_TEMP/requirements.txt"
 
   docs:
     runs-on: ubuntu-latest

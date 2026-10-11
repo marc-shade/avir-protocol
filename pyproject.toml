@@ -79,7 +79,6 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0",
     "bandit>=1.7.0",
-    "safety>=2.3.0",
     "fastapi>=0.110",
     "httpx",
 ]
