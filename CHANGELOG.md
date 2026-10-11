@@ -5,6 +5,23 @@ follows [Keep a Changelog](https://keepachangelog.com/); versions follow SemVer.
 
 ## [Unreleased]
 
+### Fixed
+- **`avir` CLI works against the library APIs.** Every command crashed before
+  (`Specification.version`, `VerificationLevel(2)`, `Attestation.timestamp`,
+  `verify_signature(key)` did not exist).
+  - `verify` runs `CrossVerifier` (double-blind, two or more `--provider`,
+    `NAME=MODEL` form) and writes an attestation of the matrix; a signing
+    failure is an error instead of a warning next to an unsigned file.
+  - `check` pins the signature to `--public-key` (PEM, hex or base64); a file
+    signed by any other key fails. Without a key it says the key is
+    self-asserted. Unsigned attestations fail.
+  - `init` templates now pass `avir validate`; `init` no longer overwrites.
+  - `compare` checks chain integrity and signatures before comparing.
+  - `verify --model` is replaced by `--provider NAME=MODEL` (one model per
+    provider). Removed flags whose value was never used or would be an
+    unbacked claim: `verify --level` (the level is L3 by construction),
+    `verify --container`, `validate --strict`, `compare --output`.
+
 ### Changed
 - **Network quorum counts decisive votes only.** `aggregate_consensus` now
   requires, for every benchmark, `min_verifiers` distinct keys (and distinct

@@ -85,18 +85,43 @@ print(f"Pass Rate: {matrix.consensus_pass_rate:.1%}")
 ### CLI Usage
 
 ```bash
-# Run cross-provider verification
-avir verify spec.json --provider claude --provider openai --provider gemini
+# Run double-blind cross-provider verification (two or more --provider;
+# NAME=MODEL picks a model, e.g. --provider codex-cli=gpt-5.5)
+avir verify spec.json --provider claude-cli --provider codex-cli
 
-# Generate signed attestation
-avir verify spec.json --attestation results.json --sign --key-file private.pem
+# Write a signed attestation (Ed25519 key, PEM or hex)
+openssl genpkey -algorithm ed25519 -out private.pem
+openssl pkey -in private.pem -pubout -out public.pem
+avir verify spec.json --provider claude-cli --provider codex-cli \
+    --attestation att.json --sign --key-file private.pem
 
 # Validate a specification
 avir validate spec.json
 
-# Check existing attestation
-avir check attestation.json --public-key public.pem
+# Check an attestation against the signer's public key
+avir check att.json --public-key public.pem
+
+# Start a new specification; compare attestations
+avir init my-system --output spec.json
+avir compare a.json b.json
 ```
+
+Providers: `claude-cli`, `codex-cli`, `gemini-cli` (headless CLIs, rubric
+benchmarks only; they abstain on numeric benchmarks, so a numeric spec run with
+only CLI providers ends INVALID) and `claude`, `openai`, `gemini` (vendor SDKs,
+need API keys). Provider ids must be distinct (`claude` and `claude-cli` are
+both `claude`). The attestation verdict is the matrix consensus and the
+verification level is L3 (multi-provider, no TEE).
+
+`avir check` fails on an unsigned attestation, a broken chain hash, or a bad
+signature. With `--public-key` it fails unless the attestation was signed by
+that key. Without it, the signature is checked against the key embedded in the
+attestation, which proves only self-consistency; the output says so. The
+signature covers the chain hash (spec, environment, results hash, timestamp),
+not the `verdict` field.
+
+Exit codes: 0 success, 1 failure or error, 2 partial result (`verify` PARTIAL
+consensus, `compare` disagreeing verdicts).
 
 ### Real-Model Verification (no SDK, v1.1+)
 
