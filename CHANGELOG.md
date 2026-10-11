@@ -21,6 +21,10 @@ follows [Keep a Changelog](https://keepachangelog.com/); versions follow SemVer.
   it a job below decisive quorum stayed open forever and new verifiers worked
   through every stale job first. Verifiers log a refused request as such
   instead of "coordinator unreachable".
+- **Verifier waits for the coordinator at startup.** Registration retried
+  every `--poll-interval` when the coordinator is unreachable (daemon mode),
+  instead of exiting and relying on the service manager's restart delay; at
+  boot the SSH tunnel is often not up yet. `--once` still fails fast.
 - Verifiers log the cause of every ABSTAIN; the requester prints decisive/total
   votes per benchmark and warns on abstentions.
 - Coordinator `--no-access-log` flag.

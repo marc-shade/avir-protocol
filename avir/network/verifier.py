@@ -144,6 +144,27 @@ def run_once(base: str, priv: bytes, pub_hex: str, provider, org: str, model_lab
     return True
 
 
+def _register(base: str, body: dict[str, Any], *, retry_interval: float | None) -> None:
+    """Register with the coordinator.
+
+    A daemon (``retry_interval`` set) waits out an unreachable coordinator, as it
+    does when polling: at boot its SSH tunnel or the coordinator may not be up
+    yet, and exiting would leave recovery to the service manager's restart delay.
+    An HTTP refusal is a configuration error and raises at once.
+    """
+    while True:
+        try:
+            _post(base, "/verifiers/register", body)
+            return
+        except urllib.error.HTTPError:
+            raise
+        except urllib.error.URLError as exc:
+            if retry_interval is None:
+                raise
+            print(f"[verifier] coordinator unreachable, retrying registration: {exc}")
+            time.sleep(retry_interval)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Run an AVIR verifier node (contribute to the network).")
     ap.add_argument("--coordinator", required=True, help="coordinator base URL, e.g. http://host:8770")
@@ -165,10 +186,10 @@ def main() -> int:
     org = args.org or provider.get_organization()
     label = args.label or fingerprint(pub_hex)
 
-    _post(args.coordinator, "/verifiers/register", {
+    _register(args.coordinator, {
         "pubkey": pub_hex, "label": label, "org": org,
         "models": [model_label],
-    })
+    }, retry_interval=None if args.once else args.poll_interval)
     print(f"[verifier] registered {label} ({fingerprint(pub_hex)}) org={org} model={model_label}")
 
     if args.once:

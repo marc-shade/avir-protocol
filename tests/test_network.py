@@ -256,6 +256,35 @@ def test_coordinator_rejects_duplicate_verdict(client):
     assert client.post(f"/jobs/{job_id}/verdicts", json=body).status_code == 409
 
 
+def test_verifier_registration_waits_for_unreachable_coordinator(monkeypatch):
+    """At boot the tunnel/coordinator may be down: a daemon retries, --once fails fast."""
+    import urllib.error
+    from avir.network import verifier as vmod
+    calls = []
+
+    def fake_post(base, path, body, timeout=30.0):
+        calls.append(path)
+        if len(calls) < 3:
+            raise urllib.error.URLError(ConnectionRefusedError(61, "Connection refused"))
+        return {"ok": True}
+
+    monkeypatch.setattr(vmod, "_post", fake_post)
+    monkeypatch.setattr(vmod.time, "sleep", lambda s: None)
+    vmod._register("https://x", {"pubkey": "p"}, retry_interval=5.0)
+    assert calls == ["/verifiers/register"] * 3
+
+    calls.clear()
+    with pytest.raises(urllib.error.URLError):
+        vmod._register("https://x", {"pubkey": "p"}, retry_interval=None)
+    assert len(calls) == 1
+
+    def refused(base, path, body, timeout=30.0):
+        raise urllib.error.HTTPError(base + path, 400, "bad", {}, None)
+    monkeypatch.setattr(vmod, "_post", refused)
+    with pytest.raises(urllib.error.HTTPError):
+        vmod._register("https://x", {"pubkey": "p"}, retry_interval=5.0)
+
+
 def _age_job(db_path, job_id, seconds):
     import sqlite3
     from datetime import datetime, timedelta, timezone
