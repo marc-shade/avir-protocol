@@ -6,11 +6,10 @@ verification process: specification loading, benchmark execution,
 result analysis, and attestation generation.
 """
 
-import asyncio
 import uuid
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Optional
 
 from .attestation import (
     Attestation,
@@ -46,7 +45,7 @@ class AVIRVerifier:
         provider: str = "claude",
         model: Optional[str] = None,
         level: VerificationLevel = VerificationLevel.L2_STANDARD,
-        config: Dict[str, Any] = None,
+        config: dict[str, Any] = None,
     ):
         """
         Initialize verifier.
@@ -131,7 +130,7 @@ class AVIRVerifier:
 
     def create_suite(
         self,
-        executors: Dict[str, Callable] = None,
+        executors: dict[str, Callable] = None,
     ) -> BenchmarkSuite:
         """
         Create benchmark suite from specification.
@@ -162,8 +161,8 @@ class AVIRVerifier:
 
     async def execute_benchmarks(
         self,
-        context: Dict[str, Any] = None,
-    ) -> List[BenchmarkVerdict]:
+        context: dict[str, Any] = None,
+    ) -> list[BenchmarkVerdict]:
         """
         Execute all benchmarks in suite.
 
@@ -233,8 +232,8 @@ class AVIRVerifier:
     async def verify(
         self,
         spec_path: str | Path,
-        executors: Dict[str, Callable] = None,
-        context: Dict[str, Any] = None,
+        executors: dict[str, Callable] = None,
+        context: dict[str, Any] = None,
         spec_source: Optional[str] = None,
     ) -> "VerificationResult":
         """
@@ -299,7 +298,7 @@ class VerificationResult:
         specification: Specification,
         attestation: Attestation,
         verdict: Verdict,
-        benchmarks: List[BenchmarkVerdict],
+        benchmarks: list[BenchmarkVerdict],
     ):
         self.specification = specification
         self.attestation = attestation
@@ -320,7 +319,7 @@ class VerificationResult:
         """Save attestation to file."""
         self.attestation.save(str(path))
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert result to dictionary."""
         return {
             'system': {

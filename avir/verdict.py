@@ -6,7 +6,6 @@ Defines verdict types and criteria for verification outcomes.
 
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional
 
 
 class VerdictLevel(Enum):
@@ -31,8 +30,8 @@ class Verdict:
     total: int
     pass_rate: float
     details: str
-    failed_benchmarks: List[str]
-    warnings: List[str]
+    failed_benchmarks: list[str]
+    warnings: list[str]
 
     @classmethod
     def from_results(
@@ -40,8 +39,8 @@ class Verdict:
         passed: int,
         failed: int,
         total: int,
-        failed_benchmarks: List[str] = None,
-        warnings: List[str] = None,
+        failed_benchmarks: list[str] = None,
+        warnings: list[str] = None,
     ) -> "Verdict":
         """
         Create verdict from result counts.
@@ -126,7 +125,7 @@ class Verdict:
 
 
 def determine_overall_verdict(
-    benchmark_verdicts: List[dict],
+    benchmark_verdicts: list[dict],
     min_pass_rate: float = 0.6,
 ) -> Verdict:
     """

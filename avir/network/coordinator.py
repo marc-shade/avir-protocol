@@ -47,7 +47,7 @@ class JobBody(BaseModel):
 class VerdictItem(BaseModel):
     benchmark_id: str
     verdict: str
-    confidence: Optional[float] = None
+    confidence: Optional[float] = None  # noqa: UP045 - pydantic evaluates this at runtime; X | None breaks on py3.9
 
 
 class VerdictBody(BaseModel):
@@ -61,7 +61,7 @@ class VerdictBody(BaseModel):
 DEFAULT_JOB_TTL_S = 3600.0
 
 
-def create_app(db_path: str, *, token: Optional[str] = None,
+def create_app(db_path: str, *, token: str | None = None,
                job_ttl_s: float = DEFAULT_JOB_TTL_S) -> FastAPI:
     """``job_ttl_s``: an open job older than this is marked ``expired`` and no
     longer handed out or accepted. Quorum counts decisive votes only and each
@@ -103,7 +103,7 @@ def create_app(db_path: str, *, token: Optional[str] = None,
 
     # --- jobs ---
     @app.post("/jobs")
-    def submit_job(body: JobBody, x_avir_token: Optional[str] = Header(default=None)) -> dict[str, Any]:
+    def submit_job(body: JobBody, x_avir_token: Optional[str] = Header(default=None)) -> dict[str, Any]:  # noqa: UP045 - FastAPI evaluates this at runtime; X | None breaks on py3.9
         if token and x_avir_token != token:
             raise HTTPException(401, "invalid or missing X-AVIR-Token")
         job_id = uuid.uuid4().hex
@@ -201,6 +201,7 @@ def create_app(db_path: str, *, token: Optional[str] = None,
 
 def main() -> int:
     import argparse
+
     import uvicorn
 
     ap = argparse.ArgumentParser(description="Run the AVIR coordinator daemon.")

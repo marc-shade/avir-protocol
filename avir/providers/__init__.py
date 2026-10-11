@@ -6,17 +6,17 @@ AI provider integrations for AVIR verification.
 
 from .base import AVIRProvider
 from .claude import ClaudeProvider
-from .openai import OpenAIProvider
-from .gemini import GeminiProvider
 from .cli import (
-    CLIProvider,
     ClaudeCLIProvider,
+    CLIProvider,
     CodexCLIProvider,
     GeminiCLIProvider,
     HTTPModelProvider,
-    fedora_ollama,
     ailab_model,
+    fedora_ollama,
 )
+from .gemini import GeminiProvider
+from .openai import OpenAIProvider
 
 __all__ = [
     "AVIRProvider",

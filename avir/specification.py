@@ -9,7 +9,8 @@ import hashlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Optional
+
 import yaml
 
 
@@ -28,7 +29,7 @@ class Capability:
     name: str
     description: str
     category: str  # memory, reasoning, coordination, performance, custom
-    benchmarks: List[str]
+    benchmarks: list[str]
 
 
 @dataclass
@@ -57,9 +58,9 @@ class BenchmarkSpec:
     runs: int = 5
     warmup_runs: int = 0
     outlier_policy: str = "iqr"
-    requirements: List[str] = field(default_factory=list)
-    setup: List[str] = field(default_factory=list)
-    teardown: List[str] = field(default_factory=list)
+    requirements: list[str] = field(default_factory=list)
+    setup: list[str] = field(default_factory=list)
+    teardown: list[str] = field(default_factory=list)
     # Rubric-benchmark fields (model-judged verification)
     kind: str = "numeric"          # "numeric" | "rubric"
     prompt: str = ""               # task posed to the subject model
@@ -80,11 +81,11 @@ class Specification:
     """
     avir_version: str
     system: SystemInfo
-    capabilities: List[Capability]
-    benchmarks: List[BenchmarkSpec]
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    capabilities: list[Capability]
+    benchmarks: list[BenchmarkSpec]
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    _raw: Dict[str, Any] = field(default_factory=dict, repr=False)
+    _raw: dict[str, Any] = field(default_factory=dict, repr=False)
     _hash: Optional[str] = field(default=None, repr=False)
 
     @classmethod
@@ -111,7 +112,7 @@ class Specification:
         return cls.from_dict(data)
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Specification":
+    def from_dict(cls, data: dict[str, Any]) -> "Specification":
         """Create specification from dictionary."""
         # Validate required fields
         required = ['avir_version', 'system', 'capabilities', 'benchmarks']
@@ -174,7 +175,7 @@ class Specification:
             _raw=data,
         )
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert specification to dictionary."""
         return {
             'avir_version': self.avir_version,
@@ -233,7 +234,7 @@ class Specification:
                 return bench
         return None
 
-    def validate(self) -> List[str]:
+    def validate(self) -> list[str]:
         """
         Validate specification and return list of errors.
 

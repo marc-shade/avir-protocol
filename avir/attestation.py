@@ -12,8 +12,8 @@ import platform
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
 from enum import Enum
+from typing import Any, Optional
 
 
 class VerificationLevel(Enum):
@@ -34,7 +34,7 @@ class EnvironmentInfo:
     cpu_cores: Optional[int] = None
     memory_gb: Optional[float] = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             'container': self.container,
             'os': self.os,
@@ -59,7 +59,7 @@ class ProviderInfo:
     model: str
     instance_id: str
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             'provider': self.provider,
             'model': self.model,
@@ -100,7 +100,7 @@ class AttestationChain:
         expected = self.calculate_chain_hash()
         return self.chain_hash == expected
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             'spec_hash': self.spec_hash,
             'env_hash': self.env_hash,
@@ -110,7 +110,7 @@ class AttestationChain:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "AttestationChain":
+    def from_dict(cls, data: dict[str, Any]) -> "AttestationChain":
         return cls(
             spec_hash=data['spec_hash'],
             env_hash=data['env_hash'],
@@ -127,7 +127,7 @@ class Signature:
     public_key: str  # Base64 encoded
     signature: str   # Base64 encoded
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             'algorithm': self.algorithm,
             'public_key': self.public_key,
@@ -167,8 +167,8 @@ class Attestation:
     completed_at: datetime
 
     # Results
-    benchmark_verdicts: List[Dict[str, Any]]
-    summary: Dict[str, Any]
+    benchmark_verdicts: list[dict[str, Any]]
+    summary: dict[str, Any]
 
     # Attestation chain
     chain: AttestationChain
@@ -227,7 +227,7 @@ class Attestation:
         """Get attestation chain hash."""
         return self.chain.chain_hash
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert attestation to dictionary."""
         return {
             'avir_protocol_version': self.protocol_version,
@@ -270,7 +270,7 @@ class Attestation:
             f.write(self.to_json())
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Attestation":
+    def from_dict(cls, data: dict[str, Any]) -> "Attestation":
         """Create attestation from dictionary."""
         return cls(
             protocol_version=data['avir_protocol_version'],
@@ -309,7 +309,7 @@ class Attestation:
     @classmethod
     def load(cls, path: str) -> "Attestation":
         """Load attestation from JSON file."""
-        with open(path, 'r') as f:
+        with open(path) as f:
             return cls.from_json(f.read())
 
     def verify_integrity(self) -> bool:
@@ -340,8 +340,8 @@ class Attestation:
             else:
                 raise ValueError(f"Unsupported algorithm: {algorithm}")
 
-        except ImportError:
-            raise RuntimeError("cryptography package required for signing")
+        except ImportError as e:
+            raise RuntimeError("cryptography package required for signing") from e
 
     def verify_signature(self) -> bool:
         """
@@ -354,8 +354,8 @@ class Attestation:
             return False
 
         try:
-            from cryptography.hazmat.primitives.asymmetric import ed25519
             from cryptography.exceptions import InvalidSignature
+            from cryptography.hazmat.primitives.asymmetric import ed25519
 
             if self.signature.algorithm == "Ed25519":
                 public_key = ed25519.Ed25519PublicKey.from_public_bytes(
@@ -371,15 +371,15 @@ class Attestation:
 
             return False
 
-        except ImportError:
-            raise RuntimeError("cryptography package required for signature verification")
+        except ImportError as e:
+            raise RuntimeError("cryptography package required for signature verification") from e
 
 
 def create_attestation(
     spec_hash: str,
     env: EnvironmentInfo,
     verifier: ProviderInfo,
-    benchmark_verdicts: List[Dict[str, Any]],
+    benchmark_verdicts: list[dict[str, Any]],
     system_name: str,
     system_version: str,
     started_at: datetime,

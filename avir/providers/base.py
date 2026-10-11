@@ -7,7 +7,7 @@ Updated December 2025 with enhanced configuration and verdict handling.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Optional, Union
 
 
 @dataclass
@@ -37,7 +37,7 @@ class VerdictResponse:
     value: Optional[float]
     verdict: str  # PASS, FAIL, ABSTAIN
     abstain_reason: Optional[str] = None
-    provider_metadata: Optional[Dict] = None
+    provider_metadata: Optional[dict] = None
     confidence: Optional[float] = None  # 0.0 to 1.0
 
     def is_abstain(self) -> bool:
@@ -49,7 +49,7 @@ class VerdictResponse:
     def is_fail(self) -> bool:
         return self.verdict == "FAIL"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "value": self.value,
             "verdict": self.verdict,
@@ -91,7 +91,7 @@ class AVIRProvider(ABC):
         return ProviderConfig()
 
     @abstractmethod
-    async def initialize(self, config: Dict[str, Any]) -> None:
+    async def initialize(self, config: dict[str, Any]) -> None:
         """
         Initialize provider with configuration.
 
@@ -103,8 +103,8 @@ class AVIRProvider(ABC):
     @abstractmethod
     async def execute_benchmark(
         self,
-        benchmark_spec: Dict[str, Any],
-        context: Dict[str, Any],
+        benchmark_spec: dict[str, Any],
+        context: dict[str, Any],
     ) -> Union[float, VerdictResponse]:
         """
         Execute a benchmark and return the result.
@@ -121,8 +121,8 @@ class AVIRProvider(ABC):
     @abstractmethod
     async def analyze_results(
         self,
-        results: List[Dict[str, Any]],
-    ) -> Dict[str, Any]:
+        results: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         """
         AI analysis of verification results.
 
@@ -179,11 +179,11 @@ class AVIRProvider(ABC):
         """
         return "in-process"
 
-    async def cleanup(self) -> None:
+    async def cleanup(self) -> None:  # noqa: B027 - optional hook, no-op by default; abstract would force every provider to override
         """Cleanup provider resources."""
         pass
 
-    def get_capabilities(self) -> Dict[str, bool]:
+    def get_capabilities(self) -> dict[str, bool]:
         """
         Get provider capabilities.
 
@@ -199,7 +199,7 @@ class AVIRProvider(ABC):
             "large_context": False,
         }
 
-    def get_model_info(self) -> Dict[str, Any]:
+    def get_model_info(self) -> dict[str, Any]:
         """
         Return model information for attestation.
 

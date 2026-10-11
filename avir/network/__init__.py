@@ -19,17 +19,17 @@ optionally distinct organizations); the requester's own key is excluded.
 """
 
 from .keys import (
+    canonical,
+    fingerprint,
     generate_keypair,
     load_or_create_identity,
-    fingerprint,
     sign,
     verify,
-    canonical,
 )
 from .protocol import (
+    aggregate_consensus,
     sign_verdict,
     verify_verdict,
-    aggregate_consensus,
 )
 
 __all__ = [

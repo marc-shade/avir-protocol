@@ -4,14 +4,13 @@ AVIR Benchmark System
 Handles benchmark definition, execution, and result analysis.
 """
 
-import asyncio
+import hashlib
+import json
 import statistics
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
-import hashlib
-import json
+from typing import Any, Callable, Optional
 
 from .specification import BenchmarkSpec
 
@@ -36,7 +35,7 @@ class Statistics:
     count: int
     outliers_removed: int = 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             'mean': round(self.mean, 3),
             'std_dev': round(self.std_dev, 3),
@@ -59,10 +58,10 @@ class BenchmarkResult:
     unit: str
     duration_ms: float
     timestamp: str
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
     error: Optional[str] = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             'benchmark_id': self.benchmark_id,
             'run_number': self.run_number,
@@ -88,7 +87,7 @@ class BenchmarkVerdict:
     statistics: Statistics
     reason: str
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             'benchmark_id': self.benchmark_id,
             'verdict': 'PASS' if self.passed else 'FAIL',
@@ -119,13 +118,13 @@ class Benchmark:
         """
         self.spec = spec
         self.executor = executor
-        self.results: List[BenchmarkResult] = []
+        self.results: list[BenchmarkResult] = []
 
     @property
     def id(self) -> str:
         return self.spec.id
 
-    async def execute_once(self, run_number: int, context: Dict[str, Any]) -> BenchmarkResult:
+    async def execute_once(self, run_number: int, context: dict[str, Any]) -> BenchmarkResult:
         """
         Execute benchmark once and return result.
 
@@ -174,7 +173,7 @@ class Benchmark:
                 error=str(e),
             )
 
-    async def execute(self, context: Dict[str, Any] = None) -> List[BenchmarkResult]:
+    async def execute(self, context: dict[str, Any] = None) -> list[BenchmarkResult]:
         """
         Execute benchmark for specified number of runs.
 
@@ -198,7 +197,7 @@ class Benchmark:
 
         return self.results
 
-    def remove_outliers(self, values: List[float]) -> List[float]:
+    def remove_outliers(self, values: list[float]) -> list[float]:
         """Remove outliers based on configured policy."""
         if len(values) < 4:
             return values
@@ -298,10 +297,10 @@ class BenchmarkSuite:
     Manages benchmark lifecycle and aggregates results.
     """
 
-    def __init__(self, name: str, benchmarks: List[Benchmark] = None):
+    def __init__(self, name: str, benchmarks: list[Benchmark] = None):
         self.name = name
         self.benchmarks = benchmarks or []
-        self.verdicts: List[BenchmarkVerdict] = []
+        self.verdicts: list[BenchmarkVerdict] = []
 
     @classmethod
     def from_spec(cls, spec_path: str) -> "BenchmarkSuite":
@@ -320,7 +319,7 @@ class BenchmarkSuite:
         """Add benchmark to suite."""
         self.benchmarks.append(benchmark)
 
-    async def execute_all(self, context: Dict[str, Any] = None) -> List[BenchmarkVerdict]:
+    async def execute_all(self, context: dict[str, Any] = None) -> list[BenchmarkVerdict]:
         """
         Execute all benchmarks in suite.
 
@@ -340,7 +339,7 @@ class BenchmarkSuite:
 
         return self.verdicts
 
-    def get_summary(self) -> Dict[str, Any]:
+    def get_summary(self) -> dict[str, Any]:
         """Get summary of suite execution."""
         if not self.verdicts:
             return {

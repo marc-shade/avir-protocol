@@ -6,11 +6,11 @@ for inter-rater reliability measurement in cross-provider verification.
 """
 
 import pytest
-import math
+
 from avir.cross_verification import (
+    QuorumConfig,
     calculate_fleiss_kappa,
     calculate_krippendorff_alpha,
-    QuorumConfig,
 )
 
 

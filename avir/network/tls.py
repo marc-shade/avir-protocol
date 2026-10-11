@@ -24,9 +24,9 @@ from __future__ import annotations
 import ipaddress
 import os
 import ssl
+from collections.abc import Sequence
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Sequence
 
 
 def make_self_signed_cert(

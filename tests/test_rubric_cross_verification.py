@@ -13,10 +13,10 @@ from typing import Callable
 
 import pytest
 
+from avir.cross_verification import BlindingMode, CrossVerifier, IsolationLevel
 from avir.providers.base import AVIRProvider, VerdictResponse
-from avir.providers.cli import parse_judgment, build_judge_prompt
+from avir.providers.cli import build_judge_prompt, parse_judgment
 from avir.specification import Specification
-from avir.cross_verification import CrossVerifier, BlindingMode, IsolationLevel
 
 
 class FakeProvider(AVIRProvider):

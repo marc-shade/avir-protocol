@@ -25,10 +25,9 @@ import os
 import re
 import subprocess
 import urllib.request
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from .base import AVIRProvider, ProviderConfig, VerdictResponse
-
 
 _VERDICT_RE = re.compile(r"VERDICT\s*[:=]\s*(PASS|FAIL|ABSTAIN)", re.IGNORECASE)
 _CONF_RE = re.compile(r"CONFIDENCE\s*[:=]\s*([01](?:\.\d+)?)", re.IGNORECASE)
@@ -114,10 +113,10 @@ class CLIProvider(AVIRProvider):
 
     def __init__(
         self,
-        model: Optional[str] = None,
+        model: str | None = None,
         *,
         timeout: float = 240.0,
-        config: Optional[ProviderConfig] = None,
+        config: ProviderConfig | None = None,
     ):
         self._model = model or self._DEFAULT_MODEL
         self._timeout = timeout
@@ -142,14 +141,14 @@ class CLIProvider(AVIRProvider):
     def get_organization(self) -> str:
         return self._ORG
 
-    async def initialize(self, config: Dict[str, Any]) -> None:
+    async def initialize(self, config: dict[str, Any]) -> None:
         del config  # CLIs are stateless; nothing to set up
 
     # --- argv builders (subclasses override) ---
-    def _argv(self, prompt: str) -> List[str]:
+    def _argv(self, prompt: str) -> list[str]:
         raise RuntimeError(f"{self._PROVIDER_ID}: subclass must define _argv()")
 
-    def _stdin(self, prompt: str) -> Optional[str]:
+    def _stdin(self, prompt: str) -> str | None:
         del prompt
         return None
 
@@ -219,7 +218,7 @@ class ClaudeCLIProvider(CLIProvider):
     _ORG = "anthropic"
     _DEFAULT_MODEL = "claude-cli"
 
-    def _argv(self, prompt: str) -> List[str]:
+    def _argv(self, prompt: str) -> list[str]:
         return ["claude", "--print", "--output-format", "text", prompt]
 
 
@@ -228,10 +227,10 @@ class CodexCLIProvider(CLIProvider):
     _ORG = "openai"
     _DEFAULT_MODEL = "gpt-5.5"
 
-    def _argv(self, prompt: str) -> List[str]:
+    def _argv(self, prompt: str) -> list[str]:
         return ["codex", "exec", "--skip-git-repo-check", "-m", self._model, prompt]
 
-    def _stdin(self, prompt: str) -> Optional[str]:
+    def _stdin(self, prompt: str) -> str | None:
         del prompt
         return ""  # codex exec reads stdin; close it so it does not block
 
@@ -239,7 +238,7 @@ class CodexCLIProvider(CLIProvider):
         # codex exec frames output with a "codex" banner line and a trailing
         # "tokens used\n<count>" footer. Drop those framing artifacts.
         lines = text.splitlines()
-        out: List[str] = []
+        out: list[str] = []
         skip_next_numeric = False
         for line in lines:
             stripped = line.strip()
@@ -261,7 +260,7 @@ class GeminiCLIProvider(CLIProvider):
     _ORG = "google"
     _DEFAULT_MODEL = "gemini-cli"
 
-    def _argv(self, prompt: str) -> List[str]:
+    def _argv(self, prompt: str) -> list[str]:
         return ["gemini", "--skip-trust", "-p", prompt]
 
     def _clean(self, text: str) -> str:
@@ -293,7 +292,7 @@ class HTTPModelProvider(AVIRProvider):
         *,
         endpoint: str,
         model: str,
-        provider_id: Optional[str] = None,
+        provider_id: str | None = None,
         organization: str = "local",
         node: str = "",
         timeout: float = 240.0,
@@ -327,10 +326,10 @@ class HTTPModelProvider(AVIRProvider):
     def get_organization(self) -> str:
         return self._org
 
-    async def initialize(self, config: Dict[str, Any]) -> None:
+    async def initialize(self, config: dict[str, Any]) -> None:
         del config
 
-    def _chat(self, messages: List[Dict[str, str]]) -> str:
+    def _chat(self, messages: list[dict[str, str]]) -> str:
         url = f"{self._endpoint}/v1/chat/completions"
         body = json.dumps({
             "model": self._model,

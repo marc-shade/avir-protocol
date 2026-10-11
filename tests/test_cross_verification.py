@@ -1,19 +1,17 @@
 """Tests for AVIR cross-provider verification."""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 
 from avir.cross_verification import (
-    BlindingMode,
-    IsolationLevel,
     BlindedContext,
-    VerificationCell,
+    BlindingMode,
     CrossVerificationMatrix,
     CrossVerifier,
+    VerificationCell,
 )
+from avir.providers.base import AVIRProvider
 from avir.specification import Specification
 from avir.verdict import VerdictLevel
-from avir.providers.base import AVIRProvider
 
 
 class MockProvider(AVIRProvider):
@@ -37,7 +35,6 @@ class MockProvider(AVIRProvider):
     async def execute_benchmark(self, benchmark_spec, context):
         import random
         target = benchmark_spec.get("target", 100)
-        tolerance = benchmark_spec.get("tolerance", 0.2)
         # Simulate pass/fail based on pass_rate
         if random.random() < self._pass_rate:
             return target  # Pass

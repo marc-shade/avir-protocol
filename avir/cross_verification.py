@@ -21,11 +21,11 @@ Updated December 2025 with expert panel recommendations:
 
 import hashlib
 import json
+import secrets
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple
-import secrets
+from typing import Any, Optional
 
 from .providers.base import AVIRProvider
 from .specification import Specification
@@ -36,7 +36,7 @@ from .verdict import VerdictLevel
 class CVBenchmarkResult:
     """Cross-verification benchmark result (internal use)."""
     benchmark_id: str
-    values: List[float]
+    values: list[float]
     target: float
     tolerance: float
     unit: str
@@ -119,7 +119,7 @@ class BlindedContext:
     """
     context_id: str                  # Random ID, not traceable
     specification_hash: str          # Hash of spec (not the spec itself)
-    benchmark_specs: List[Dict]      # Sanitized benchmark definitions
+    benchmark_specs: list[dict]      # Sanitized benchmark definitions
     timestamp: str                   # Verification timestamp
     nonce: str                       # Unique per-verification nonce
     canary_id: str                   # Leak detection canary
@@ -182,7 +182,7 @@ class VerificationCell:
     subject_id: str            # Which provider's output was verified
     verdict: VerdictLevel
     pass_rate: float
-    results: List[CVBenchmarkResult]
+    results: list[CVBenchmarkResult]
     execution_time: float
     context_hash: str          # Hash of isolated context used
     abstain_count: int = 0     # Number of abstained benchmarks
@@ -209,7 +209,7 @@ class QuorumConfig:
     require_cross_org: bool = True   # Require providers from different organizations
 
 
-def calculate_fleiss_kappa(ratings: List[List[int]], categories: int) -> float:
+def calculate_fleiss_kappa(ratings: list[list[int]], categories: int) -> float:
     """
     Calculate Fleiss' Kappa for inter-rater reliability.
 
@@ -276,7 +276,7 @@ def calculate_fleiss_kappa(ratings: List[List[int]], categories: int) -> float:
 
 
 def calculate_krippendorff_alpha(
-    ratings: List[List[Optional[int]]],
+    ratings: list[list[Optional[int]]],
     categories: int
 ) -> float:
     """
@@ -362,8 +362,8 @@ class CrossVerificationMatrix:
     - Krippendorff's α for handling missing data
     - Quorum requirements for valid consensus
     """
-    providers: List[str]
-    cells: Dict[Tuple[str, str], VerificationCell] = field(default_factory=dict)
+    providers: list[str]
+    cells: dict[tuple[str, str], VerificationCell] = field(default_factory=dict)
     blinding_mode: BlindingMode = BlindingMode.DOUBLE_BLIND
     isolation_level: IsolationLevel = IsolationLevel.PROCESS
     quorum: QuorumConfig = field(default_factory=QuorumConfig)
@@ -378,12 +378,12 @@ class CrossVerificationMatrix:
         return self.cells.get((verifier, subject))
 
     @property
-    def cross_verifications(self) -> List[VerificationCell]:
+    def cross_verifications(self) -> list[VerificationCell]:
         """Get only cross-verifications (excludes self-verification)."""
         return [c for c in self.cells.values() if not c.is_self_verification]
 
     @property
-    def non_abstain_verifications(self) -> List[VerificationCell]:
+    def non_abstain_verifications(self) -> list[VerificationCell]:
         """Get cross-verifications that aren't primarily abstains."""
         return [c for c in self.cross_verifications if not c.is_abstain]
 
@@ -434,7 +434,7 @@ class CrossVerificationMatrix:
         }
 
         # Build ratings matrix: each subject evaluated by multiple verifiers
-        subjects = list(set(c.subject_id for c in cross))
+        subjects = list({c.subject_id for c in cross})
         ratings = []
 
         for subject in subjects:
@@ -473,8 +473,8 @@ class CrossVerificationMatrix:
             VerdictLevel.INCONCLUSIVE: 3,
         }
 
-        subjects = list(set(c.subject_id for c in cross))
-        verifiers = list(set(c.verifier_id for c in cross))
+        subjects = list({c.subject_id for c in cross})
+        verifiers = list({c.verifier_id for c in cross})
 
         # Build full matrix with None for missing/abstain
         ratings = []
@@ -566,11 +566,11 @@ class CrossVerificationMatrix:
         return agreement
 
     @property
-    def canary_leaks_detected(self) -> List[VerificationCell]:
+    def canary_leaks_detected(self) -> list[VerificationCell]:
         """Get cells where canary IDs were detected (blinding failure)."""
         return [c for c in self.cells.values() if c.canary_detected]
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert matrix to dictionary."""
         return {
             "providers": self.providers,
@@ -683,7 +683,7 @@ class CrossVerifier:
 
     def __init__(
         self,
-        providers: List[AVIRProvider],
+        providers: list[AVIRProvider],
         blinding_mode: BlindingMode = BlindingMode.DOUBLE_BLIND,
         isolation_level: IsolationLevel = IsolationLevel.PROCESS,
         iterations: int = 5,
@@ -694,7 +694,7 @@ class CrossVerifier:
         self.isolation_level = isolation_level
         self.iterations = iterations
         self.quorum = quorum or QuorumConfig()
-        self._canary_registry: Dict[str, str] = {}  # Maps context_id to canary_id
+        self._canary_registry: dict[str, str] = {}  # Maps context_id to canary_id
 
     async def verify(
         self,
@@ -749,7 +749,7 @@ class CrossVerifier:
         self,
         provider: AVIRProvider,
         spec: Specification,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Generate benchmark outputs from a provider."""
         await provider.initialize({})
 
@@ -798,10 +798,10 @@ class CrossVerifier:
     def _create_blinded_context(
         self,
         spec: Specification,
-        output: Dict[str, Any],
+        output: dict[str, Any],
         verifier_id: str,
         subject_id: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Create blinded verification context with BLAKE2b and canary."""
         blinded = BlindedContext.create(spec)
 
@@ -850,7 +850,7 @@ class CrossVerifier:
     async def _verify_in_isolation(
         self,
         verifier: AVIRProvider,
-        context: Dict[str, Any],
+        context: dict[str, Any],
         subject_id: str,
     ) -> VerificationCell:
         """Run verification in isolated context with abstain and canary tracking."""
@@ -891,7 +891,7 @@ class CrossVerifier:
                     continue
                 bm_pass = 0
                 bm_total = 0
-                judge_values: List[float] = []
+                judge_values: list[float] = []
                 for resp in text_outputs:
                     if canary_id and canary_id.upper() in resp.upper():
                         canary_detected = True
@@ -1006,7 +1006,7 @@ class CrossVerifier:
 
 async def cross_verify(
     spec: Specification,
-    providers: List[AVIRProvider],
+    providers: list[AVIRProvider],
     blinding: BlindingMode = BlindingMode.DOUBLE_BLIND,
     iterations: int = 5,
 ) -> CrossVerificationMatrix:

@@ -5,12 +5,14 @@ Tests BLAKE2b salted hashing, canary ID generation and detection,
 and context blinding mechanisms.
 """
 
-import pytest
 import re
+
+import pytest
+
 from avir.cross_verification import (
+    BlindedContext,
     blake2b_salted_hash,
     generate_canary_id,
-    BlindedContext,
 )
 from avir.specification import Specification
 

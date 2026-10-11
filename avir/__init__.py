@@ -21,18 +21,18 @@ Why Cross-Provider Verification Matters:
 __version__ = "1.2.1"
 __protocol_version__ = "1.0.0"
 
-from .verifier import AVIRVerifier
-from .benchmark import Benchmark, BenchmarkSuite, BenchmarkResult
 from .attestation import Attestation, AttestationChain
-from .specification import Specification
-from .verdict import Verdict, VerdictLevel
+from .benchmark import Benchmark, BenchmarkResult, BenchmarkSuite
 from .cross_verification import (
-    CrossVerifier,
-    CrossVerificationMatrix,
     BlindingMode,
+    CrossVerificationMatrix,
+    CrossVerifier,
     IsolationLevel,
     cross_verify,
 )
+from .specification import Specification
+from .verdict import Verdict, VerdictLevel
+from .verifier import AVIRVerifier
 
 __all__ = [
     # Core verification

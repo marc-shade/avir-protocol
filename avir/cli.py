@@ -11,14 +11,13 @@ import json
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
-from . import __version__, __protocol_version__
-from .verifier import AVIRVerifier, VerificationResult
-from .specification import Specification
+from . import __protocol_version__, __version__
 from .attestation import Attestation, VerificationLevel
-from .verdict import VerdictLevel
 from .providers import get_provider
+from .specification import Specification
+from .verdict import VerdictLevel
+from .verifier import AVIRVerifier
 
 
 def create_parser() -> argparse.ArgumentParser:
@@ -316,14 +315,14 @@ async def cmd_validate(args: argparse.Namespace) -> int:
 
     if errors:
         print(f"Specification: {args.specification}")
-        print(f"Status: INVALID")
+        print("Status: INVALID")
         print(f"Errors ({len(errors)}):")
         for error in errors:
             print(f"  - {error}")
         return 1
     else:
         print(f"Specification: {args.specification}")
-        print(f"Status: VALID")
+        print("Status: VALID")
         print(f"Version: {spec.version}")
         print(f"Benchmarks: {len(spec.benchmarks)}")
         if spec.capabilities:
@@ -347,9 +346,9 @@ async def cmd_check(args: argparse.Namespace) -> int:
 
     # Verify chain integrity
     if attestation.chain.verify():
-        print(f"Chain Integrity: VALID")
+        print("Chain Integrity: VALID")
     else:
-        print(f"Chain Integrity: INVALID")
+        print("Chain Integrity: INVALID")
         return 1
 
     # Verify signature if public key provided
@@ -357,15 +356,15 @@ async def cmd_check(args: argparse.Namespace) -> int:
         try:
             key_data = args.public_key.read_bytes()
             if attestation.verify_signature(key_data):
-                print(f"Signature: VALID")
+                print("Signature: VALID")
             else:
-                print(f"Signature: INVALID")
+                print("Signature: INVALID")
                 return 1
         except Exception as e:
             print(f"Signature verification error: {e}", file=sys.stderr)
             return 1
     elif attestation.signature:
-        print(f"Signature: Present (not verified - no public key provided)")
+        print("Signature: Present (not verified - no public key provided)")
 
     return 0
 

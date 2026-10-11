@@ -9,7 +9,6 @@ keys, and the requester's own key is excluded.
 
 from __future__ import annotations
 
-
 import pytest
 
 from avir.network import keys
@@ -18,7 +17,6 @@ from avir.network.protocol import (
     sign_verdict,
     verify_verdict,
 )
-
 
 # --------------------------------------------------------------------------
 # keys
@@ -153,6 +151,7 @@ def test_consensus_distinct_orgs_counts_only_decisive_orgs():
 def test_verifier_logs_abstain_reason(capsys):
     """A judge call that fails must leave its cause in the verifier log, not just ABSTAIN."""
     import asyncio
+
     from avir.network.verifier import _judge_job
     from avir.providers.base import VerdictResponse
 
@@ -176,6 +175,7 @@ def test_verifier_logs_abstain_reason(capsys):
 def client(tmp_path):
     fastapi = pytest.importorskip("fastapi")  # noqa: F841
     from fastapi.testclient import TestClient
+
     from avir.network.coordinator import create_app
     app = create_app(str(tmp_path / "coord.db"))
     return TestClient(app)
@@ -259,6 +259,7 @@ def test_coordinator_rejects_duplicate_verdict(client):
 def test_verifier_registration_waits_for_unreachable_coordinator(monkeypatch):
     """At boot the tunnel/coordinator may be down: a daemon retries, --once fails fast."""
     import urllib.error
+
     from avir.network import verifier as vmod
     calls = []
 
@@ -297,6 +298,7 @@ def test_job_below_quorum_expires_after_ttl(tmp_path):
     """A job stuck below decisive quorum is expired, not served or accepted forever."""
     pytest.importorskip("fastapi")
     from fastapi.testclient import TestClient
+
     from avir.network.coordinator import create_app
     db = str(tmp_path / "c.db")
     tc = TestClient(create_app(db, job_ttl_s=60))
@@ -326,6 +328,7 @@ def test_job_below_quorum_expires_after_ttl(tmp_path):
 def test_job_ttl_zero_disables_expiry(tmp_path):
     pytest.importorskip("fastapi")
     from fastapi.testclient import TestClient
+
     from avir.network.coordinator import create_app
     db = str(tmp_path / "c.db")
     tc = TestClient(create_app(db, job_ttl_s=0))
@@ -338,6 +341,7 @@ def test_job_ttl_zero_disables_expiry(tmp_path):
 def test_job_submission_token_gate(tmp_path):
     pytest.importorskip("fastapi")
     from fastapi.testclient import TestClient
+
     from avir.network.coordinator import create_app
     app = create_app(str(tmp_path / "c.db"), token="secret")
     tc = TestClient(app)

@@ -1,11 +1,10 @@
 """Tests for AVIR specification parsing and validation."""
 
 import json
-import pytest
-from pathlib import Path
 import tempfile
+from pathlib import Path
 
-from avir.specification import Specification, BenchmarkSpec, Capability, SystemInfo
+from avir.specification import BenchmarkSpec, Capability, Specification, SystemInfo
 
 
 class TestSpecification:

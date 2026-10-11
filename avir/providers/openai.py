@@ -6,11 +6,10 @@ Updated December 2025 with latest model versions.
 """
 
 import os
-from typing import Any, Dict, List, Optional
 from dataclasses import dataclass
+from typing import Any, Optional
 
 from .base import AVIRProvider, ProviderConfig, VerdictResponse
-
 
 # GPT-5.2 model variants (December 2025)
 GPT_MODELS = {
@@ -70,7 +69,7 @@ class OpenAIProvider(AVIRProvider):
         self._model = model
         self._config = config or OpenAIConfig(model=model, **kwargs)
         self._client = None
-        self._model_version_info: Optional[Dict] = None
+        self._model_version_info: Optional[dict] = None
 
     @property
     def provider_id(self) -> str:
@@ -84,7 +83,7 @@ class OpenAIProvider(AVIRProvider):
     def config(self) -> OpenAIConfig:
         return self._config
 
-    async def initialize(self, config: Dict[str, Any]) -> None:
+    async def initialize(self, config: dict[str, Any]) -> None:
         """Initialize OpenAI client with version tracking."""
         try:
             from openai import OpenAI
@@ -98,8 +97,8 @@ class OpenAIProvider(AVIRProvider):
                 "seed": self._config.seed,
                 "initialized_at": self._get_timestamp(),
             }
-        except ImportError:
-            raise RuntimeError("openai package required: pip install openai")
+        except ImportError as e:
+            raise RuntimeError("openai package required: pip install openai") from e
 
     def _get_timestamp(self) -> str:
         from datetime import datetime
@@ -107,8 +106,8 @@ class OpenAIProvider(AVIRProvider):
 
     async def execute_benchmark(
         self,
-        benchmark_spec: Dict[str, Any],
-        context: Dict[str, Any],
+        benchmark_spec: dict[str, Any],
+        context: dict[str, Any],
     ) -> VerdictResponse:
         """
         Execute benchmark using GPT-5.2 for intelligent verification.
@@ -145,8 +144,8 @@ class OpenAIProvider(AVIRProvider):
 
     async def _execute_with_retry(
         self,
-        benchmark_spec: Dict[str, Any],
-        context: Dict[str, Any],
+        benchmark_spec: dict[str, Any],
+        context: dict[str, Any],
     ) -> VerdictResponse:
         """Numeric benchmark execution.
 
@@ -210,8 +209,8 @@ class OpenAIProvider(AVIRProvider):
 
     async def analyze_results(
         self,
-        results: List[Dict[str, Any]],
-    ) -> Dict[str, Any]:
+        results: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         """
         Use GPT-5.2 to analyze verification results.
         """
@@ -256,7 +255,7 @@ Provide overall assessment and recommendations.
             },
         }
 
-    def get_capabilities(self) -> Dict[str, bool]:
+    def get_capabilities(self) -> dict[str, bool]:
         return {
             "code_execution": True,
             "multimodal": True,
@@ -266,7 +265,7 @@ Provide overall assessment and recommendations.
             "tool_use": True,
         }
 
-    def get_model_info(self) -> Dict[str, Any]:
+    def get_model_info(self) -> dict[str, Any]:
         """Return model information for attestation."""
         return {
             "provider": "openai",
@@ -292,4 +291,4 @@ class VerdictResponse:
     value: Optional[float]
     verdict: str  # PASS, FAIL, ABSTAIN
     abstain_reason: Optional[str] = None
-    provider_metadata: Optional[Dict] = None
+    provider_metadata: Optional[dict] = None
