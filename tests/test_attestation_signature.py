@@ -247,3 +247,38 @@ def test_wrong_algorithm_and_malformed_encodings_fail(
 
 def test_unsigned_does_not_verify() -> None:
     assert not make_attestation().verify_signature()
+
+
+def _signed_text(key: ed25519.Ed25519PrivateKey) -> str:
+    att = make_attestation()
+    att.sign(key.private_bytes_raw())
+    return att.to_json()
+
+
+def test_duplicate_key_is_rejected_on_load(key: ed25519.Ed25519PrivateKey) -> None:
+    """A second 'verdict' that another JSON reader may show must not ride a valid signature."""
+    text = _signed_text(key)
+    assert Attestation.from_json(text).verify_signature()
+    real = json.loads(text)["verdict"]
+    forged = text.replace(
+        f'"verdict": "{real}"', f'"verdict": "TAMPERED",\n  "verdict": "{real}"', 1)
+    assert forged != text
+    # Without strict parsing, json.loads keeps the last value and this verifies.
+    assert Attestation.from_dict(json.loads(forged)).verify_signature()
+    with pytest.raises(ValueError, match="duplicate key"):
+        Attestation.from_json(forged)
+
+
+def test_non_standard_constants_rejected_on_load(key: ed25519.Ed25519PrivateKey) -> None:
+    text = _signed_text(key)
+    nan_text = text.replace('"total": 2', '"total": NaN', 1)
+    assert nan_text != text
+    with pytest.raises(ValueError, match="non-standard JSON constant"):
+        Attestation.from_json(nan_text)
+
+
+def test_non_finite_float_does_not_verify(key: ed25519.Ed25519PrivateKey) -> None:
+    text = _signed_text(key)
+    inf_text = text.replace('"total": 2', '"total": 1e400', 1)
+    assert inf_text != text
+    assert not Attestation.from_json(inf_text).verify_signature()

@@ -19,6 +19,10 @@ follows [Keep a Changelog](https://keepachangelog.com/); versions follow SemVer.
   chain-hash-only format) makes `verify_signature()` return False, and
   `avir check` reports it as LEGACY and exits 1. Re-sign to upgrade. The
   network verdict signatures (`avir.network`) are unchanged.
+- **Strict attestation parsing.** `Attestation.from_json()`/`load()` reject
+  duplicate object keys and NaN/Infinity, so a file cannot carry a second
+  value for a field that a different JSON reader would show while the
+  signature verifies against the first.
 
 ### Fixed
 - **`avir` CLI works against the library APIs.** Every command crashed before

@@ -133,6 +133,21 @@ class AttestationChain:
 SIGNATURE_SCOPE_DOCUMENT = "document"
 
 
+def _reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    """json object hook: a key may appear once per object."""
+    obj: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in obj:
+            raise ValueError(f"duplicate key in attestation JSON: {key!r}")
+        obj[key] = value
+    return obj
+
+
+def _reject_constant(name: str) -> Any:
+    """json constant hook: NaN/Infinity are not JSON."""
+    raise ValueError(f"non-standard JSON constant in attestation: {name}")
+
+
 @dataclass
 class Signature:
     """Digital signature for attestation."""
@@ -334,8 +349,18 @@ class Attestation:
 
     @classmethod
     def from_json(cls, json_str: str) -> "Attestation":
-        """Create attestation from JSON string."""
-        return cls.from_dict(json.loads(json_str))
+        """Create attestation from JSON string.
+
+        Parsing is strict: duplicate object keys and the non-standard
+        constants NaN/Infinity are rejected. ``json.loads`` would otherwise
+        keep the last duplicate silently, so a signed file could show one
+        value to another reader and verify against a different one.
+        """
+        return cls.from_dict(json.loads(
+            json_str,
+            object_pairs_hook=_reject_duplicate_keys,
+            parse_constant=_reject_constant,
+        ))
 
     @classmethod
     def load(cls, path: str) -> "Attestation":
@@ -355,9 +380,10 @@ class Attestation:
         bytes are the same before save and after load (tuples become lists,
         non-string keys become strings and sort as strings).
         """
-        normalized = json.loads(json.dumps(document))
+        normalized = json.loads(json.dumps(document, allow_nan=False))
         return json.dumps(
             normalized, sort_keys=True, separators=(',', ':'), ensure_ascii=True,
+            allow_nan=False,
         ).encode()
 
     def signing_payload(self) -> bytes:
@@ -429,12 +455,16 @@ class Attestation:
         except ImportError as e:
             raise RuntimeError("cryptography package required for signature verification") from e
 
-        payload = self.signing_payload()
-        if self._source is not None:
-            source = copy.deepcopy(self._source)
-            source.pop('signature', None)
-            if self._canonical(source) != payload:
-                return False
+        try:
+            payload = self.signing_payload()
+            if self._source is not None:
+                source = copy.deepcopy(self._source)
+                source.pop('signature', None)
+                if self._canonical(source) != payload:
+                    return False
+        except ValueError:
+            # Non-finite floats (e.g. 1e400 parsed to inf) have no canonical form.
+            return False
 
         try:
             public_key = ed25519.Ed25519PublicKey.from_public_bytes(
