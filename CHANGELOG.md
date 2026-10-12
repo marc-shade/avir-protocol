@@ -25,6 +25,13 @@ follows [Keep a Changelog](https://keepachangelog.com/); versions follow SemVer.
   signature verifies against the first.
 
 ### Fixed
+- **CI installs what the tests import.** The `dev` extra now includes
+  `cryptography`. `pip install -e ".[dev]"` (the CI install step) left it out,
+  so collecting `test_attestation_signature.py`, `test_cli.py`,
+  `test_network.py` and `test_tls.py` failed with `ModuleNotFoundError`.
+  `dev` already carried `fastapi` and `httpx` for the network tests; the
+  library still imports `cryptography` lazily or only from the network/TLS
+  modules, so runtime dependencies are unchanged.
 - **`avir` CLI works against the library APIs.** Every command crashed before
   (`Specification.version`, `VerificationLevel(2)`, `Attestation.timestamp`,
   `verify_signature(key)` did not exist).

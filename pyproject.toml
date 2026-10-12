@@ -79,6 +79,9 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0",
     "bandit>=1.7.0",
+    # The test suite exercises signing, the network and TLS, so the dev
+    # environment needs what those extras pull in (crypto, network).
+    "cryptography>=41.0.0",
     "fastapi>=0.110",
     "httpx",
 ]
