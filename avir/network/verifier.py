@@ -7,6 +7,10 @@ local provider (claude/codex/gemini CLI, or any OpenAI-compatible endpoint),
 signs the verdict with your Ed25519 key, and submits it. Your provider
 credentials never leave your machine.
 
+The coordinator counts a verdict only from a registered key, under the org it
+registered with. If the coordinator gates registration, put its registration
+token in AVIR_REGISTRATION_TOKEN (environment, so it stays off the command line).
+
 Run it:
   avir-verifier --coordinator http://host:8770 --provider claude-cli --org alice
   avir-verifier --coordinator http://host:8770 --provider http \
@@ -24,6 +28,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -58,11 +63,12 @@ def _get(base: str, path: str, timeout: float = 30.0) -> dict[str, Any]:
     return payload
 
 
-def _post(base: str, path: str, body: dict[str, Any], timeout: float = 30.0) -> dict[str, Any]:
+def _post(base: str, path: str, body: dict[str, Any], timeout: float = 30.0,
+          headers: dict[str, str] | None = None) -> dict[str, Any]:
     data = json.dumps(body).encode()
     req = urllib.request.Request(
         require_http_url(base.rstrip("/") + path), data=data,
-        headers={"Content-Type": "application/json"}, method="POST",
+        headers={"Content-Type": "application/json", **(headers or {})}, method="POST",
     )
     # B310: scheme already restricted to http/https by require_http_url above.
     with urllib.request.urlopen(req, timeout=timeout, context=_ctx()) as resp:  # nosec B310
@@ -151,17 +157,22 @@ def run_once(base: str, priv: bytes, pub_hex: str, provider: AVIRProvider, org: 
     return True
 
 
-def _register(base: str, body: dict[str, Any], *, retry_interval: float | None) -> None:
+def _register(base: str, body: dict[str, Any], *, retry_interval: float | None,
+              token: str | None = None) -> None:
     """Register with the coordinator.
+
+    ``token`` is the coordinator's registration token, sent as
+    ``X-AVIR-Registration-Token`` when set.
 
     A daemon (``retry_interval`` set) waits out an unreachable coordinator, as it
     does when polling: at boot its SSH tunnel or the coordinator may not be up
     yet, and exiting would leave recovery to the service manager's restart delay.
     An HTTP refusal is a configuration error and raises at once.
     """
+    headers = {"X-AVIR-Registration-Token": token} if token else None
     while True:
         try:
-            _post(base, "/verifiers/register", body)
+            _post(base, "/verifiers/register", body, headers=headers)
             return
         except urllib.error.HTTPError:
             raise
@@ -170,6 +181,28 @@ def _register(base: str, body: dict[str, Any], *, retry_interval: float | None) 
                 raise
             print(f"[verifier] coordinator unreachable, retrying registration: {exc}")
             time.sleep(retry_interval)
+
+
+def _poll_step(base: str, priv: bytes, pub_hex: str, provider: AVIRProvider, org: str,
+               model_label: str, *, reregister: Callable[[], None]) -> bool:
+    """One daemon iteration. Returns True if a job was processed.
+
+    HTTP 403 means the coordinator has no registry entry for this key (for
+    example its database was reset): register again rather than keep judging
+    jobs whose verdicts would be refused.
+    """
+    try:
+        return run_once(base, priv, pub_hex, provider, org, model_label)
+    except urllib.error.HTTPError as exc:
+        # The coordinator answered but refused (e.g. 410: job expired while judging).
+        print(f"[verifier] coordinator rejected request: HTTP {exc.code} {exc.reason}")
+        if exc.code == 403:
+            print("[verifier] coordinator does not know this key; registering again")
+            reregister()
+        return False
+    except urllib.error.URLError as exc:
+        print(f"[verifier] coordinator unreachable: {exc}")
+        return False
 
 
 def main() -> int:
@@ -193,10 +226,10 @@ def main() -> int:
     org = args.org or provider.get_organization()
     label = args.label or fingerprint(pub_hex)
 
-    _register(args.coordinator, {
-        "pubkey": pub_hex, "label": label, "org": org,
-        "models": [model_label],
-    }, retry_interval=None if args.once else args.poll_interval)
+    registration = {"pubkey": pub_hex, "label": label, "org": org, "models": [model_label]}
+    reg_token = os.environ.get("AVIR_REGISTRATION_TOKEN") or None
+    _register(args.coordinator, registration,
+              retry_interval=None if args.once else args.poll_interval, token=reg_token)
     print(f"[verifier] registered {label} ({fingerprint(pub_hex)}) org={org} model={model_label}")
 
     if args.once:
@@ -206,16 +239,13 @@ def main() -> int:
         return 0
 
     print(f"[verifier] polling {args.coordinator} every {args.poll_interval}s (Ctrl-C to stop)")
+    def reregister() -> None:
+        _register(args.coordinator, registration, retry_interval=args.poll_interval,
+                  token=reg_token)
+
     while True:
-        try:
-            did = run_once(args.coordinator, priv, pub_hex, provider, org, model_label)
-        except urllib.error.HTTPError as exc:
-            # The coordinator answered but refused (e.g. 410: job expired while judging).
-            print(f"[verifier] coordinator rejected request: HTTP {exc.code} {exc.reason}")
-            did = False
-        except urllib.error.URLError as exc:
-            print(f"[verifier] coordinator unreachable: {exc}")
-            did = False
+        did = _poll_step(args.coordinator, priv, pub_hex, provider, org, model_label,
+                         reregister=reregister)
         if not did:
             time.sleep(args.poll_interval)
 

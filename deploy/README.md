@@ -17,6 +17,14 @@ random submission token, writes `~/Library/LaunchAgents/com.avir.coordinator.pli
 and loads it (RunAtLoad + KeepAlive, restarts on reboot/crash). It prints the CA
 bundle path to hand to verifiers and the token path.
 
+Add `GATE_REGISTRATION=1` to also generate a registration token
+(`~/.avir/registration.token`, 0600) and require it for
+`POST /verifiers/register`. Only registered keys count toward quorum, under the
+org they registered with, so on any coordinator reachable by parties you do not
+trust, gate registration; otherwise anyone who can reach it can register keys
+under any org. Hand the registration token (not the submission token) to each
+verifier operator you admit.
+
 Exposure is your choice via `COORD_HOST`:
 - `127.0.0.1` (default) -- local only.
 - a Tailscale/LAN IP -- reachable by your devices / cluster.
@@ -43,9 +51,17 @@ The verifier polls forever (KeepAlive), judging jobs with your provider and
 submitting Ed25519-signed verdicts. Your provider credentials never leave your
 machine.
 
+If the coordinator gates registration, add
+`REGISTRATION_TOKEN_FILE=/path/to/registration.token`; the script puts the
+token in the service environment as `AVIR_REGISTRATION_TOKEN`. Keep
+`VERIFIER_ORG` stable: verdicts are recorded under the org the key registered
+with, and a submission naming a different org is refused.
+
 ## Security checklist
 
 - TLS on (cert + key); clients trust it via `AVIR_CA_BUNDLE` (or a public CA).
 - `AVIR_COORDINATOR_TOKEN` set (the script does this) to gate job submission.
+- `AVIR_REGISTRATION_TOKEN` set (`GATE_REGISTRATION=1`) to gate verifier
+  registration whenever the coordinator is reachable beyond trusted parties.
 - Identity/token/key files are written `0600`.
 - Prefer Tailscale or a reverse proxy over raw `0.0.0.0` on the open internet.

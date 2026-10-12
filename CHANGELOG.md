@@ -48,6 +48,35 @@ follows [Keep a Changelog](https://keepachangelog.com/); versions follow SemVer.
     unbacked claim: `verify --level` (the level is L3 by construction),
     `verify --container`, `validate --strict`, `compare --output`.
 
+### Changed (network registry)
+- **Quorum counts only registered verifiers.** `POST /jobs/{id}/verdicts` and
+  `GET /jobs/next` refuse a key that is not in the coordinator's registry
+  (HTTP 403). Before, any key with a valid signature counted, so fresh keys
+  could fill `min_verifiers` without ever registering.
+- **The registered org is the one recorded and counted.** The verdict record
+  carries the org on file for the key, and `require_distinct_orgs` counts that.
+  `verifier_org` in the request body (not covered by the signature) may be
+  empty; a different value is refused with HTTP 400 instead of being stored.
+  Before, the body value was stored as-is, so one party could claim several
+  orgs.
+- **Optional registration token.** With `AVIR_REGISTRATION_TOKEN` set on the
+  coordinator, `POST /verifiers/register` requires it in
+  `X-AVIR-Registration-Token` (401 otherwise). It is separate from the
+  job-submission token. Unset keeps registration open, unchanged for a
+  coordinator only trusted parties can reach; the coordinator warns at
+  startup when exposed beyond localhost without it, and `/health` reports
+  `registration_required_token`. The verifier reads the token from the
+  `AVIR_REGISTRATION_TOKEN` environment variable; `deploy/setup_launchd.sh`
+  takes `GATE_REGISTRATION=1` (coordinator) and `REGISTRATION_TOKEN_FILE`
+  (verifier).
+- Registration rejects a pubkey that is not a hex 32-byte Ed25519 key (400;
+  it raised a server error before).
+- The verifier daemon registers again when the coordinator answers 403 (for
+  example after its registry was reset) instead of judging jobs it cannot
+  submit.
+- Wire format and verdict signatures are unchanged; verifiers on the previous
+  release keep working against this coordinator while registration is open.
+
 ### Changed
 - **Network quorum counts decisive votes only.** `aggregate_consensus` now
   requires, for every benchmark, `min_verifiers` distinct keys (and distinct

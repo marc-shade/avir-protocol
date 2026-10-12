@@ -191,8 +191,10 @@ AVIR_COORDINATOR=http://HOST:8770 avir-mcp
 ```
 
 Trust model: the coordinator is untrusted for integrity (it cannot forge signed
-verdicts); consensus counts distinct verifier keys (optionally distinct orgs)
-and excludes the requester's own key. This is operator-level decentralization,
+verdicts); consensus counts distinct registered verifier keys (optionally
+distinct orgs, as registered) and excludes the requester's own key. Set
+`AVIR_REGISTRATION_TOKEN` on any coordinator untrusted parties can reach, or
+anyone can register keys under any org. This is operator-level decentralization,
 not formal independent-lab replication; Sybil/collusion is only partially
 mitigated. Full detail and honest limits: [docs/NETWORK.md](docs/NETWORK.md).
 

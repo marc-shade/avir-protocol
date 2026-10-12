@@ -4,12 +4,16 @@
 #
 # Usage:
 #   COORD_HOST=0.0.0.0 COORD_PORT=8770 \
-#   SAN="my.host.name 100.x.y.z" \
+#   SAN="my.host.name 100.x.y.z" GATE_REGISTRATION=1 \
 #   bash deploy/setup_launchd.sh coordinator
 #
 #   VERIFIER_COORD=https://my.host:8770 VERIFIER_PROVIDER=claude-cli VERIFIER_ORG=alice \
-#   AVIR_CA_BUNDLE=~/.avir/coordinator.crt \
+#   AVIR_CA_BUNDLE=~/.avir/coordinator.crt REGISTRATION_TOKEN_FILE=~/.avir/registration.token \
 #   bash deploy/setup_launchd.sh verifier
+#
+# GATE_REGISTRATION=1 makes the coordinator require a registration token
+# (~/.avir/registration.token) for POST /verifiers/register; verifiers pass it
+# with REGISTRATION_TOKEN_FILE. Without it registration is open.
 #
 # Requires the venv that has avir-protocol[network,crypto] installed; set
 # PYTHON to its python (default: ./.venv/bin/python).
@@ -39,6 +43,13 @@ if [ "$ROLE" = "coordinator" ]; then
   if [ ! -f "$TOKEN_FILE" ]; then "$PYTHON" -c "import secrets;print(secrets.token_hex(24))" > "$TOKEN_FILE"; chmod 600 "$TOKEN_FILE"; fi
   TOKEN="$(cat "$TOKEN_FILE")"
 
+  # registration token (opt-in: GATE_REGISTRATION=1); required for verifiers to register
+  REG_ENV_XML=""; REG_TOKEN_FILE="$AVIR_DIR/registration.token"
+  if [ "${GATE_REGISTRATION:-0}" = "1" ]; then
+    if [ ! -f "$REG_TOKEN_FILE" ]; then "$PYTHON" -c "import secrets;print(secrets.token_hex(24))" > "$REG_TOKEN_FILE"; chmod 600 "$REG_TOKEN_FILE"; fi
+    REG_ENV_XML="<key>AVIR_REGISTRATION_TOKEN</key><string>$(cat "$REG_TOKEN_FILE")</string>"
+  fi
+
   PLIST="$LA_DIR/com.avir.coordinator.plist"
   cat > "$PLIST" <<PL
 <?xml version="1.0" encoding="UTF-8"?>
@@ -55,6 +66,7 @@ if [ "$ROLE" = "coordinator" ]; then
   </array>
   <key>EnvironmentVariables</key><dict>
     <key>AVIR_COORDINATOR_TOKEN</key><string>$TOKEN</string>
+    $REG_ENV_XML
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
@@ -67,6 +79,11 @@ PL
   launchctl load "$PLIST"
   echo "coordinator loaded: https://$COORD_HOST:$COORD_PORT  (TLS, token-gated)"
   echo "  token:      $TOKEN_FILE"
+  if [ -n "$REG_ENV_XML" ]; then
+    echo "  registration token: $REG_TOKEN_FILE  (give to admitted verifiers: REGISTRATION_TOKEN_FILE=...)"
+  else
+    echo "  registration: OPEN (set GATE_REGISTRATION=1 unless only trusted parties reach this port)"
+  fi
   echo "  CA bundle:  $CERT  (give to verifiers: export AVIR_CA_BUNDLE=$CERT)"
   echo "  UNINSTALL:  launchctl unload $PLIST && rm $PLIST"
 
@@ -78,6 +95,10 @@ elif [ "$ROLE" = "verifier" ]; then
   [ -n "${VERIFIER_ENDPOINT:-}" ] && EXTRA+=(--endpoint "$VERIFIER_ENDPOINT")
   [ -n "${VERIFIER_MODEL:-}" ] && EXTRA+=(--model "$VERIFIER_MODEL")
   EXTRA_XML=""; for e in "${EXTRA[@]:-}"; do [ -n "$e" ] && EXTRA_XML="$EXTRA_XML<string>$e</string>"; done
+  REG_ENV_XML=""
+  if [ -n "${REGISTRATION_TOKEN_FILE:-}" ]; then
+    REG_ENV_XML="<key>AVIR_REGISTRATION_TOKEN</key><string>$(cat "$REGISTRATION_TOKEN_FILE")</string>"
+  fi
 
   PLIST="$LA_DIR/com.avir.verifier.plist"
   cat > "$PLIST" <<PL
@@ -94,6 +115,7 @@ elif [ "$ROLE" = "verifier" ]; then
   </array>
   <key>EnvironmentVariables</key><dict>
     <key>AVIR_CA_BUNDLE</key><string>${AVIR_CA_BUNDLE:-}</string>
+    $REG_ENV_XML
   </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>

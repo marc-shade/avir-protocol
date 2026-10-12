@@ -39,6 +39,15 @@ def load_or_create_identity(path: str | Path) -> tuple[bytes, bytes]:
     return priv, pub
 
 
+def is_valid_pubkey(pub_hex: str) -> bool:
+    """True if ``pub_hex`` is a hex-encoded 32-byte Ed25519 public key."""
+    try:
+        ed25519.Ed25519PublicKey.from_public_bytes(bytes.fromhex(pub_hex))
+        return True
+    except ValueError:
+        return False
+
+
 def fingerprint(pubkey: bytes | str) -> str:
     """Stable short handle for a public key (first 16 hex chars of SHA-256)."""
     raw = bytes.fromhex(pubkey) if isinstance(pubkey, str) else pubkey

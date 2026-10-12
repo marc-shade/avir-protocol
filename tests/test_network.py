@@ -193,7 +193,8 @@ def _spec():
 def test_coordinator_full_lifecycle(client):
     # three independent verifiers register
     parties = {}
-    for name, org in [("alice", "org-a"), ("bob", "org-b"), ("carol", "org-c")]:
+    orgs = {"alice": "org-a", "bob": "org-b", "carol": "org-c"}
+    for name, org in orgs.items():
         priv, pub = keys.generate_keypair()
         parties[name] = (priv, pub.hex())
         r = client.post("/verifiers/register", json={
@@ -218,8 +219,9 @@ def test_coordinator_full_lifecycle(client):
         assert "requester_pubkey" not in nxt  # blinded
         verdicts = [{"benchmark_id": "q1", "verdict": "PASS", "confidence": 0.9}]
         sig = sign_verdict(priv, job_id, verdicts)
+        # the verifier client sends the org it registered with
         rr = client.post(f"/jobs/{job_id}/verdicts", json={
-            "verifier_pubkey": pub_hex, "verifier_org": "x", "verifier_model": "m",
+            "verifier_pubkey": pub_hex, "verifier_org": orgs[_name], "verifier_model": "m",
             "verdicts": verdicts, "signature": sig})
         assert rr.status_code == 200
 
@@ -228,6 +230,7 @@ def test_coordinator_full_lifecycle(client):
     assert res["status"] == "complete"
     assert res["consensus"]["overall_verdict"] == "VERIFIED"
     assert res["consensus"]["distinct_verifiers"] == 3
+    assert res["consensus"]["distinct_orgs"] == 3
 
 
 def test_coordinator_rejects_forged_signature(client):
@@ -246,6 +249,7 @@ def test_coordinator_rejects_forged_signature(client):
 
 def test_coordinator_rejects_duplicate_verdict(client):
     priv, pub = keys.generate_keypair()
+    assert _register(client, pub.hex(), "x").status_code == 200
     job_id = client.post("/jobs", json={
         "spec": _spec(), "subject_responses": {"q1": ["x"]}, "min_verifiers": 1}).json()["job_id"]
     verdicts = [{"benchmark_id": "q1", "verdict": "PASS", "confidence": 1.0}]
@@ -263,7 +267,7 @@ def test_verifier_registration_waits_for_unreachable_coordinator(monkeypatch):
     from avir.network import verifier as vmod
     calls = []
 
-    def fake_post(base, path, body, timeout=30.0):
+    def fake_post(base, path, body, timeout=30.0, headers=None):
         calls.append(path)
         if len(calls) < 3:
             raise urllib.error.URLError(ConnectionRefusedError(61, "Connection refused"))
@@ -279,7 +283,7 @@ def test_verifier_registration_waits_for_unreachable_coordinator(monkeypatch):
         vmod._register("https://x", {"pubkey": "p"}, retry_interval=None)
     assert len(calls) == 1
 
-    def refused(base, path, body, timeout=30.0):
+    def refused(base, path, body, timeout=30.0, headers=None):
         raise urllib.error.HTTPError(base + path, 400, "bad", {}, None)
     monkeypatch.setattr(vmod, "_post", refused)
     with pytest.raises(urllib.error.HTTPError):
@@ -304,6 +308,9 @@ def test_job_below_quorum_expires_after_ttl(tmp_path):
     tc = TestClient(create_app(db, job_ttl_s=60))
     priv, pub = keys.generate_keypair()
     _, other = keys.generate_keypair()
+    priv2, pub2 = keys.generate_keypair()
+    for key, org in ((pub, "a"), (other, "c"), (pub2, "b")):
+        assert _register(tc, key.hex(), org).status_code == 200
     job_id = tc.post("/jobs", json={"spec": _spec(), "subject_responses": {"q1": ["x"]},
                                     "min_verifiers": 2}).json()["job_id"]
     # one verifier abstains: below quorum, still open and still served to others
@@ -318,7 +325,6 @@ def test_job_below_quorum_expires_after_ttl(tmp_path):
     assert tc.get(f"/jobs/{job_id}").json()["status"] == "expired"
     assert tc.get(f"/jobs/next?pubkey={other.hex()}").json()["job"] is None
     late = [{"benchmark_id": "q1", "verdict": "PASS", "confidence": 1.0}]
-    priv2, pub2 = keys.generate_keypair()
     r = tc.post(f"/jobs/{job_id}/verdicts", json={
         "verifier_pubkey": pub2.hex(), "verifier_org": "b", "verifier_model": "m",
         "verdicts": late, "signature": sign_verdict(priv2, job_id, late)})
@@ -350,6 +356,154 @@ def test_job_submission_token_gate(tmp_path):
     # correct token -> ok
     assert tc.post("/jobs", json={"spec": _spec(), "subject_responses": {}},
                    headers={"X-AVIR-Token": "secret"}).status_code == 200
+
+
+# --------------------------------------------------------------------------
+# quorum counts only registered verifiers, with their registered org
+# --------------------------------------------------------------------------
+
+def _register(tc, pub_hex, org, headers=None):
+    return tc.post("/verifiers/register", json={
+        "pubkey": pub_hex, "label": org, "org": org, "models": ["m"]}, headers=headers or {})
+
+
+def _signed_body(priv, pub_hex, job_id, org, verdict="PASS"):
+    verdicts = [{"benchmark_id": "q1", "verdict": verdict, "confidence": 1.0}]
+    return {"verifier_pubkey": pub_hex, "verifier_org": org, "verifier_model": "m",
+            "verdicts": verdicts, "signature": sign_verdict(priv, job_id, verdicts)}
+
+
+def _job(tc, min_verifiers, distinct_orgs=False):
+    return tc.post("/jobs", json={
+        "spec": _spec(), "subject_responses": {"q1": ["x"]},
+        "min_verifiers": min_verifiers, "require_distinct_orgs": distinct_orgs,
+    }).json()["job_id"]
+
+
+def test_unregistered_keys_cannot_reach_quorum(client):
+    """Fresh keys with valid signatures but no registry entry are refused."""
+    job_id = _job(client, 2, distinct_orgs=True)
+    for org in ("org-a", "org-b"):
+        priv, pub = keys.generate_keypair()
+        r = client.post(f"/jobs/{job_id}/verdicts",
+                        json=_signed_body(priv, pub.hex(), job_id, org))
+        assert r.status_code == 403
+        assert "not registered" in r.json()["detail"]
+    res = client.get(f"/jobs/{job_id}").json()
+    assert res["status"] == "open"
+    assert res["verdicts"] == []
+    assert res["consensus"]["quorum_met"] is False
+
+
+def test_body_org_cannot_satisfy_distinct_orgs(client):
+    """Two keys registered under one org cannot claim two orgs in their verdicts."""
+    job_id = _job(client, 2, distinct_orgs=True)
+    parties = []
+    for _ in range(2):
+        priv, pub = keys.generate_keypair()
+        assert _register(client, pub.hex(), "org-a").status_code == 200
+        parties.append((priv, pub.hex()))
+    (p1, k1), (p2, k2) = parties
+    assert client.post(f"/jobs/{job_id}/verdicts",
+                       json=_signed_body(p1, k1, job_id, "org-a")).status_code == 200
+    r = client.post(f"/jobs/{job_id}/verdicts", json=_signed_body(p2, k2, job_id, "org-b"))
+    assert r.status_code == 400
+    assert "registered org" in r.json()["detail"]
+    res = client.get(f"/jobs/{job_id}").json()
+    assert res["status"] == "open"
+    assert res["consensus"]["quorum_met"] is False
+    assert [v["verifier_org"] for v in res["verdicts"]] == ["org-a"]
+
+
+def test_verdict_records_the_registered_org(client):
+    """An empty body org is accepted; the record carries the org on file."""
+    job_id = _job(client, 2, distinct_orgs=True)
+    for org in ("org-a", "org-b"):
+        priv, pub = keys.generate_keypair()
+        assert _register(client, pub.hex(), org).status_code == 200
+        r = client.post(f"/jobs/{job_id}/verdicts", json=_signed_body(priv, pub.hex(), job_id, ""))
+        assert r.status_code == 200
+    res = client.get(f"/jobs/{job_id}").json()
+    assert sorted(v["verifier_org"] for v in res["verdicts"]) == ["org-a", "org-b"]
+    assert res["consensus"]["distinct_orgs"] == 2
+    assert res["status"] == "complete"
+
+
+def test_unregistered_key_is_not_served_jobs(client):
+    _job(client, 1)
+    _, pub = keys.generate_keypair()
+    assert client.get(f"/jobs/next?pubkey={pub.hex()}").status_code == 403
+    assert _register(client, pub.hex(), "org-a").status_code == 200
+    assert client.get(f"/jobs/next?pubkey={pub.hex()}").json()["job"] is not None
+
+
+def test_register_rejects_a_malformed_pubkey(client):
+    for bad in ("zz", "ab" * 31, "not hex at all"):
+        assert _register(client, bad, "org-a").status_code == 400
+
+
+def test_registration_token_gate(tmp_path):
+    pytest.importorskip("fastapi")
+    from fastapi.testclient import TestClient
+
+    from avir.network.coordinator import create_app
+    tc = TestClient(create_app(str(tmp_path / "c.db"), token="[REDACTED]",
+                               registration_token="reg-secret"))
+    _, pub = keys.generate_keypair()
+    assert _register(tc, pub.hex(), "org-a").status_code == 401
+    assert _register(tc, pub.hex(), "org-a",
+                     headers={"X-AVIR-Registration-Token": "wrong"}).status_code == 401
+    # the job-submission token does not authorize registration
+    assert _register(tc, pub.hex(), "org-a",
+                     headers={"X-AVIR-Token": "submit-secret"}).status_code == 401
+    assert tc.get("/verifiers").json()["count"] == 0
+    assert _register(tc, pub.hex(), "org-a",
+                     headers={"X-AVIR-Registration-Token": "reg-secret"}).status_code == 200
+    health = tc.get("/health").json()
+    assert health["registration_required_token"] is True
+
+
+def test_registration_is_open_without_a_registration_token(client):
+    """Localhost-only deployments keep the original open registration."""
+    _, pub = keys.generate_keypair()
+    assert _register(client, pub.hex(), "org-a").status_code == 200
+    assert client.get("/health").json()["registration_required_token"] is False
+
+
+def test_verifier_sends_the_registration_token(monkeypatch):
+    from avir.network import verifier as vmod
+    seen = []
+    monkeypatch.setattr(vmod, "_post", lambda base, path, body, timeout=30.0, headers=None:
+                        seen.append(headers) or {"ok": True})
+    vmod._register("https://x", {"pubkey": "p"}, retry_interval=None, token="reg-secret")
+    vmod._register("https://x", {"pubkey": "p"}, retry_interval=None, token=None)
+    assert seen == [{"X-AVIR-Registration-Token": "reg-secret"}, None]
+
+
+def test_verifier_registers_again_when_the_coordinator_forgets_it(monkeypatch):
+    """A 403 means the coordinator has no record of the key (e.g. a reset
+    registry); the daemon registers again instead of judging jobs it cannot
+    submit."""
+    import urllib.error
+
+    from avir.network import verifier as vmod
+    registered = []
+
+    def forbidden(*a, **k):
+        raise urllib.error.HTTPError("https://x/jobs/next", 403, "Forbidden", {}, None)
+
+    monkeypatch.setattr(vmod, "run_once", forbidden)
+    did = vmod._poll_step("https://x", b"k", "p", None, "org-a", "m",
+                          reregister=lambda: registered.append(True))
+    assert did is False and registered == [True]
+
+    def gone(*a, **k):
+        raise urllib.error.HTTPError("https://x/jobs/j/verdicts", 410, "Gone", {}, None)
+
+    monkeypatch.setattr(vmod, "run_once", gone)
+    assert vmod._poll_step("https://x", b"k", "p", None, "org-a", "m",
+                           reregister=lambda: registered.append(True)) is False
+    assert registered == [True]
 
 
 # --------------------------------------------------------------------------
